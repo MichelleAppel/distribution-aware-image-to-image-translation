@@ -14,4 +14,5 @@ Helge's comments:
 - [ ] 5. Only then move on to proper images like street numbers and horese and zebra. With such toy examples you could split the work in that one of you focusses on reimplementing/making the baseline work (using weighted examples). While the other one focusses on implementing the importance sampling. Of course, you should plan and discuss all the steps together, but it would be good to have a split on the implementation side of things.
 
 Dealine: April 14th
+
 Our deadline: April 5th
