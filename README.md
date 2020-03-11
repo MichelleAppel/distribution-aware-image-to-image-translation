@@ -22,8 +22,9 @@ So parallel to this:
 - [ ] Make datasets ready (street number and maybe more)
 
 Datasets:
-https://www.kaggle.com/stanfordu/street-view-house-numbers
+- street numbers-MNIST https://www.kaggle.com/stanfordu/street-view-house-numbers
 http://yann.lecun.com/exdb/mnist/
+(already split training and test set so we don't need to)
 
 Dealine: April 14th
 
