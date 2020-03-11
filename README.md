@@ -9,11 +9,14 @@ Helge's comments:
 
 - [ ] 3. With similarly simple datasets, can you construct a case where you can test the combination of discriminator and importance sampling (still without a generator)? 
 
-- [ ] 4. Construct a toy example where you test importance sampling, generator and discriminator all together (still very simple data where you know how the sampling should look like). 
+- [ ] 4. Construct a toy example where you test importance sampling, generator and discriminator all together (still very simple 
+data where you know how the sampling should look like). 
 
-- [ ] 5. Only then move on to proper images like street numbers and horese and zebra. With such toy examples you could split the work in that one of you focusses on reimplementing/making the baseline work (using weighted examples). While the other one focusses on implementing the importance sampling. Of course, you should plan and discuss all the steps together, but it would be good to have a split on the implementation side of things.
+- [ ] 5. Only then move on to proper images like street numbers and horese and zebra.
 
-Parallel to this:
+> With such toy examples you could split the work in that one of you focusses on reimplementing/making the baseline work (using weighted examples). While the other one focusses on implementing the importance sampling. Of course, you should plan and discuss all the steps together, but it would be good to have a split on the implementation side of things.
+
+So parallel to this:
 
 - [ ] Reimplement the work of Binkowski (weighted loss GAN), and make adaptable for Importance Sampling.
 - [ ] Make datasets ready (street number and maybe more)
