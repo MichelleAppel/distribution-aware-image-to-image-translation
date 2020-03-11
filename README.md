@@ -21,6 +21,10 @@ So parallel to this:
 - [ ] Reimplement the work of Binkowski (weighted loss GAN), and make adaptable for Importance Sampling.
 - [ ] Make datasets ready (street number and maybe more)
 
+Datasets:
+https://www.kaggle.com/stanfordu/street-view-house-numbers
+http://yann.lecun.com/exdb/mnist/
+
 Dealine: April 14th
 
 Our deadline: April 5th
