@@ -27,3 +27,6 @@ Our deadline: April 5th
 
 Links:
 - [My code to the GANs](https://github.com/MichelleAppel/deep-learning/blob/master/assignment_3/code). Here everything is in one file, but it is more helpful if the classes are split into seperate files each. It would be helpful if the Python code is modular, meaning that we can easily substitute the weighted loss fucntion by importance sampling. (This is challenging though, because the loss function happens on a different location in the code then the sampling, meaning that there should be room for a module in the dataloader and in the loss function)
+- CycleGAN: https://machinelearningmastery.com/what-is-cyclegan/
+https://junyanz.github.io/CycleGAN/
+https://github.com/junyanz/CycleGAN/
