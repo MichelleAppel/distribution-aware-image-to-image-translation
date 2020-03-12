@@ -3,7 +3,7 @@
 Helge's comments:
 > Do you already have an idea of how to split the work? It is a bit difficult in your case as you need to first implement the baseline (or is there code?), then add the importance sampling, and only once both are running you can move on the the experiments. To counter this, can you create toy example, where you can test the sampling approach? Here some suggestions: 
 
-- [ ] 1. Use a dataset of images, each image either entirely black or entirely white. Use a loss that is 1 for white images and 0 for black images. Can you construct an importance sampling function that selects only the black images (because lower loss function is better).
+- [x] 1. Use a dataset of images, each image either entirely black or entirely white. Use a loss that is 1 for white images and 0 for black images. Can you construct an importance sampling function that selects only the black images (because lower loss function is better).
 
 - [ ] 2. Use a dataset with more colors and different constants for each color, e.g. red = 1, blue =0.5, white = 1, black = 0 ... Can you train an importance sampling approach that matches these 'rewards'? 
 
