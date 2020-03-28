@@ -7,7 +7,7 @@ Helge's comments:
 
 - [x] 2. Use a dataset with more colors and different constants for each color, e.g. red = 1, blue =0.5, white = 1, black = 0 ... Can you train an importance sampling approach that matches these 'rewards'? 
 
-- [ ] 3. With similarly simple datasets, can you construct a case where you can test the combination of discriminator and importance sampling (still without a generator)? 
+- [x] 3. With similarly simple datasets, can you construct a case where you can test the combination of discriminator and importance sampling (still without a generator)? 
 
 - [ ] 4. Construct a toy example where you test importance sampling, generator and discriminator all together (still very simple 
 data where you know how the sampling should look like). 
