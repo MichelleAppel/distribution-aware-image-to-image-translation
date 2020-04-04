@@ -10,10 +10,10 @@ Given input-output pairs (data_A, data_B), it learns a network netG that can min
     min_<netG> ||netG(data_A) - data_B||_1
 You need to implement the following functions:
     <modify_commandline_options>:　Add model-specific options and rewrite default values for existing options.
-    TO-DO: <__init__>: Initialize this model class.
-    TO-DO: <set_input>: Unpack input data and perform data pre-processing.
-    TO-DO: <forward>: Run forward pass. This will be called by both <optimize_parameters> and <test>.
-    TO-DO: <optimize_parameters>: Update network weights; it will be called in every training iteration.
+    <__init__>: Initialize this model class.
+    <set_input>: Unpack input data and perform data pre-processing.
+    <forward>: Run forward pass. This will be called by both <optimize_parameters> and <test>.
+    <optimize_parameters>: Update network weights; it will be called in every training iteration.
 """
 import torch
 from .base_model import BaseModel
@@ -66,10 +66,11 @@ class BatchWeightModel(BaseModel):
         # specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks to save and load networks.
         # you can use opt.isTrain to specify different behaviors for training and test. For example, some networks will not be used during test, and you don't need to load them.
         #M taken from cycleGAN
+        # in the paper: G_A: G_xy, G_B: G_yx
         if self.isTrain:
             self.model_names = ['G_A', 'G_B', 'D', 'W_A', 'W_B']
         else:  # during test time, only load Gs and W
-            self.model_names = ['G_A', 'G_B', 'W_A', 'W_B'] #M? what should I load during test
+            self.model_names = ['G_A', 'G_B'] #M? what should I load during test
         
         # define networks; you can use opt.isTrain to specify different behaviors for training and test.
         #M taken from cycleGAN
@@ -92,9 +93,8 @@ class BatchWeightModel(BaseModel):
                 assert(opt.input_nc == opt.output_nc)
             self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
             self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
-            # define loss functions!!!!!!!!!!!
-            self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
-            self.criterionWeights = torch.nn.L1Loss()
+            # define loss
+            self.criterionGAN = networks.weighted_GANLoss().to(self.device)  # define GAN loss.
             # define and initialize optimizers. You can define one optimizer for each network.
             # If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
             # schedulers will be automatically created by function <BaseModel.setup>.
@@ -120,21 +120,61 @@ class BatchWeightModel(BaseModel):
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
-        self.output = self.netG(self.data_A)  # generate output image given the input data_A
+        self.fake_B = self.netG_A(self.real_A)  # G_xy(x) in the paper
+        self.fake_A = self.netG_B(self.real_B)  # G_yx(y) in the paper
 
-    def backward(self):
+    def compute_Ls(self):
+        """Computes L- and L+ of the paper """
+        self.L_minus = self.criterionGAN.L_minus(self.real_A, self.fake_B)
+        self.L_plus = self.criterionGAN.L_minus(self.fake_A, self.real_B)
+        
+    def backward_GW(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # caculate the intermediate results if necessary; here self.output has been computed during function <forward>
         # calculate loss given the input and intermediate results
-        self.loss_G = self.criterionLoss(self.output, self.data_B) * self.opt.lambda_regression
-        self.loss_G.backward()       # calculate gradients of network G w.r.t. loss_G
 
-    def optimize_parameters(self):
-        """Update network weights; it will be called in every training iteration."""
+        #M calculate the loss
+        self.compute_Ls()        # calculate L- and L+
+        self.loss_G = self.criterionGAN.loss_G(self.L_minus, self.L_plus)
+        self.loss_W = self.criterionGAN.loss_W(self.L_minus, self.L_plus)
+
+        #M calculate the gradients
+        self.loss_G.backward()       # calculate gradients of network G w.r.t. loss_G
+        self.loss_W.backward()
+
+    def backward_D(self):
+        """Calculate losses, gradients, and update network weights; called in every training iteration"""
+        # caculate the intermediate results if necessary; here self.output has been computed during function <forward>
+        # calculate loss given the input and intermediate results
+
+        #M calculate the loss
+        self.compute_Ls()        # calculate L- and L+
+        self.loss_D = self.criterionGAN.loss_D(self.L_minus, self.L_plus)   #calculate loss
+
+        #M calculate the gradients
+        self.loss_D.backward()       # calculate gradients of network G w.r.t. loss_D
+
+    def optimize_parameters_GW(self):
+        """Update network weights for G and W; it will be called in every training iteration."""
         self.forward()               # first call forward to calculate intermediate results
-        self.optimizer.zero_grad()   # clear network G's existing gradients
-        self.backward()              # calculate gradients for network G
-        self.optimizer.step()        # update gradients for network G
+        
+        self.optimizer_G.zero_grad()   # clear networks existing gradients
+        self.optimizer_W.zero_grad()
+        
+        self.backward_GW()              # calculate loss and gradients for network G and W
+        
+        self.optimizer_G.step()        # update gradients for network G
+        self.optimizer_W.step() 
+
+    def optimize_parameters_D(self):
+        """Update network weights for D; it will be called in every training iteration."""
+        self.forward()               # first call forward to calculate intermediate results
+        
+        self.optimizer_D.zero_grad()   # clear network D's existing gradients
+        
+        self.backward_D()              # calculate loss and gradients for network D
+        
+        self.optimizer_D.step()        # update gradients for network D
 
 
 
