@@ -203,6 +203,49 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
     return init_net(net, init_type, init_gain, gpu_ids)
 
 
+def define__BatchWeight_G(gpu_ids=[]):
+    """Create a generator
+
+    Parameters:
+        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
+
+    Returns a weight network
+
+    The generator network is defined in the paper
+    """
+    net = BatchWeightGenerator()
+
+    return networks.init_net(net, gpu_ids)
+
+def define__BatchWeight_D(gpu_ids=[]):
+    """Create a discriminator
+
+    Parameters:
+        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
+
+    Returns a weight network
+
+    The discriminator network is defined in the paper
+    """
+    net = JointDiscriminator()
+
+    return networks.init_net(net, gpu_ids)
+
+def define__BatchWeight_W(gpu_ids=[]):
+    """Create a weight network
+
+    Parameters:
+        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
+
+    Returns a weight network
+
+    The weight network is a DC-GAN generator
+    """
+    net = DCGANGenerator(gpu_ids.length)
+
+    return networks.init_net(net, gpu_ids)
+
+
 ##############################################################################
 # Classes
 ##############################################################################
@@ -680,3 +723,130 @@ class PixelDiscriminator(nn.Module):
     def forward(self, input):
         """Standard forward."""
         return self.net(input)
+
+
+class JointDiscriminator(nn.Module):
+    """Defines a joint discriminator"""
+
+    def __init__(self, input_nc=3, ndf=32):
+        """Construct a joint discriminator
+
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+        """
+
+        self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=4, stride=2, padding=0)
+        self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
+        self.c_x3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=0)
+
+        self.c_xy1 = nn.Conv2d(input_nc, ndf*2, kernel_size=4, stride=2, padding=0)
+        self.c_xy2 = nn.Conv2d(ndf*2, ndf * 4, kernel_size=4, stride=2, padding=0)
+        self.resBlock = ResnetBlock(128, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
+        self.c_xy3 = nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=0)
+        self.c_xy4 = nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=0)
+        self.fcl1 = nn.Linear(1024, 256)
+        self.fcl2 = nn.Linear(256, 1)
+
+        self.c_y1 = nn.Conv2d(input_nc, ndf, kernel_size=4, stride=2, padding=0)
+        self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
+        self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=0)
+
+    def forward(self, input_x, input_y):
+        """Standard forward."""
+        x1 = self.c_x1(input_x)
+        x2 = self.c_x2(x1)
+        x3 = self.c_x2(x2)
+
+        y1 = self.c_y1(input_y)
+        y2 = self.c_y2(y1)
+        y3 = self.c_y2(y2)
+
+        xy = nn.cat((input_x, input_y), dim = 2) #M? not sure how to concatenate
+        xy1 = self.c_xy1(xy)
+        xy1 = nn.cat((x1, xy1, y1), dim = 2)
+        xy2 = self.c_xy1(xy1)
+        xy2 = nn.cat((x2, xy2, y2), dim = 2)
+        xy2 = self.resBlock(xy2)
+        xy2 = self.resBlock(xy2)
+        xy3 = self.c_xy3(xy2)
+        xy3 = nn.cat((x3, xy3, y3), dim = 2)
+        xy3 = self.c_xy4(xy3)
+        xy3 = self.fcl1(xy3) 
+        xy3 = self.fcl2(xy3) 
+        
+        return xy3
+
+class BatchWeightGenerator(nn.Module):
+    """Defines a generator from the paper"""
+
+    def __init__(self, input_nc=3, ndf=32, s, K, d):
+        """Construct a joint discriminator
+
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+        """
+        self.s = s
+
+        self.c_x1 = nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=0)
+        self.resBlock = ResnetBlock(64, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
+        self.c_x2 = nn.Conv2d(ndf * 2, ndf * 2, kernel_size=1, stride=1, padding=0)
+
+        self.c_xz1 = nn.Conv2d(64 + 32/s, ndf*2, kernel_size=64, stride=1, padding=0)
+        self.ct_xz1 = nn.ConvTranspose2d(64, c, kernel_size=K, stride=s)
+
+    def forward(self, input_x, input_z):
+        """Standard forward."""
+        x1 = self.c_x1(input_x)
+        x1 = self.resBlock(x1)
+        x1 = self.resBlock(x1)
+        x1 = self.c_x2(x1)
+
+        z1 = input_z.repeat(32/self.s, 32/self.s)
+
+        xz = nn.cat((x1, z1), dim = 2) #M? not sure how to concatenate
+        xz = self.c_xz1(xz)
+        xz = self.resBlock(xz)
+        xz = self.resBlock(xz)
+        xz = self.tc_xz1(xz)
+        
+        return xz
+
+class DCGANGenerator(nn.Module):
+    """DCGAN Generator Code. Used as weight network in the paper"""
+
+    def __init__(self, ngpu):
+        super(DCGANGenerator, self).__init__()
+        self.ngpu = ngpu
+        # Number of channels in the training images. For color images this is 3
+        nc = 3
+        # Size of z latent vector (i.e. size of generator input)
+        nz = 100
+        # Size of feature maps in generator
+        ngf = 64
+        self.main = nn.Sequential(
+            # input is Z, going into a convolution
+            nn.ConvTranspose2d( nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.ReLU(True),
+            # state size. (ngf*8) x 4 x 4
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # state size. (ngf*4) x 8 x 8
+            nn.ConvTranspose2d( ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # state size. (ngf*2) x 16 x 16
+            nn.ConvTranspose2d( ngf * 2, ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.ReLU(True),
+            # state size. (ngf) x 32 x 32
+            nn.ConvTranspose2d( ngf, nc, 4, 2, 1, bias=False),
+            nn.Tanh()
+            # state size. (nc) x 64 x 64
+        )
+
+    def forward(self, input):
+        return self.main(input)
