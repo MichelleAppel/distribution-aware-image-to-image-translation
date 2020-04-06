@@ -215,7 +215,7 @@ def define__BatchWeight_G(gpu_ids=[]):
     """
     net = BatchWeightGenerator()
 
-    return networks.init_net(net, gpu_ids)
+    return init_net(net, gpu_ids=gpu_ids)
 
 def define__BatchWeight_D(gpu_ids=[]):
     """Create a discriminator
@@ -229,7 +229,7 @@ def define__BatchWeight_D(gpu_ids=[]):
     """
     net = JointDiscriminator()
 
-    return networks.init_net(net, gpu_ids)
+    return init_net(net, gpu_ids=gpu_ids)
 
 def define__BatchWeight_W(gpu_ids=[]):
     """Create a weight network
@@ -241,9 +241,9 @@ def define__BatchWeight_W(gpu_ids=[]):
 
     The weight network is a DC-GAN generator
     """
-    net = DCGANGenerator(gpu_ids.length)
+    net = DCGANGenerator(len(gpu_ids))
 
-    return networks.init_net(net, gpu_ids)
+    return init_net(net, gpu_ids=gpu_ids)
 
 
 ##############################################################################
@@ -335,7 +335,7 @@ class weighted_GANLoss(nn.Module):
         Note: Do not use sigmoid as the last layer of Discriminator.
         LSGAN needs no sigmoid. vanilla GANs will handle it with BCEWithLogitsLoss.
         """
-        super(GANLoss, self).__init__()
+        super(weighted_GANLoss, self).__init__()
         self.register_buffer('real_label', torch.tensor(target_real_label))
         self.register_buffer('fake_label', torch.tensor(target_fake_label))
 
@@ -356,19 +356,19 @@ class weighted_GANLoss(nn.Module):
             target_tensor = self.fake_label
         return target_tensor.expand_as(prediction)
 
-    def l_minus(self, A, B):
+    def L_minus(self, A, B):
         #computes L- of the paper
         # A = self.real_A
         # B = self.fake_B
-        AB = self.netG_B(A)
+        AB = self.netG_B(A) # TODO
         w_a = (nn.sigmoid(self.net_W_A(A)) + nn.sigmoid(-self.net_W_B(AB))) / 2
         self.L_minus = torch.sum(self.netD(A, B)*w_a)
 
-    def l_plus(self, A, B):
+    def L_plus(self, A, B):
         #computes L- of the paper
         # A = self.fake_A
         # B = self.real_B
-        BA = self.netG_A(B)
+        BA = self.netG_A(B) # TODO
         w_b = (nn.sigmoid(-self.net_W_A(BA)) + nn.sigmoid(self.net_W_B(B))) / 2
         self.L_plus = torch.sum(self.netD(A, B)*w_b)
 
@@ -735,6 +735,7 @@ class JointDiscriminator(nn.Module):
             input_nc (int)  -- the number of channels in input images
             ndf (int)       -- the number of filters in the last conv layer
         """
+        super(JointDiscriminator, self).__init__()
 
         self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=4, stride=2, padding=0)
         self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
@@ -780,20 +781,22 @@ class JointDiscriminator(nn.Module):
 class BatchWeightGenerator(nn.Module):
     """Defines a generator from the paper"""
 
-    def __init__(self, input_nc=3, ndf=32, s, K, d):
+    def __init__(self, input_nc=3, ndf=32, s=2, K=4, c=3):
         """Construct a joint discriminator
 
         Parameters:
             input_nc (int)  -- the number of channels in input images
             ndf (int)       -- the number of filters in the last conv layer
         """
+        super(BatchWeightGenerator, self).__init__()
+        
         self.s = s
 
         self.c_x1 = nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=0)
         self.resBlock = ResnetBlock(64, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
         self.c_x2 = nn.Conv2d(ndf * 2, ndf * 2, kernel_size=1, stride=1, padding=0)
 
-        self.c_xz1 = nn.Conv2d(64 + 32/s, ndf*2, kernel_size=64, stride=1, padding=0)
+        self.c_xz1 = nn.Conv2d(64 , ndf*2, kernel_size=64, stride=1, padding=0) # + int(32/s)
         self.ct_xz1 = nn.ConvTranspose2d(64, c, kernel_size=K, stride=s)
 
     def forward(self, input_x, input_z):
@@ -803,13 +806,14 @@ class BatchWeightGenerator(nn.Module):
         x1 = self.resBlock(x1)
         x1 = self.c_x2(x1)
 
-        z1 = input_z.repeat(32/self.s, 32/self.s)
+        z1 = input_z#.repeat(32/self.s, 32/self.s)
+        # print(z1.shape, x1.shape)
 
-        xz = nn.cat((x1, z1), dim = 2) #M? not sure how to concatenate
-        xz = self.c_xz1(xz)
+        # xz = torch.cat((x1, z1), dim = 2) #M? not sure how to concatenate
+        xz = self.c_xz1(x1)
         xz = self.resBlock(xz)
         xz = self.resBlock(xz)
-        xz = self.tc_xz1(xz)
+        xz = self.ct_xz1(xz)
         
         return xz
 

@@ -45,7 +45,7 @@ if __name__ == '__main__':
     t_data = (time.time() - data_time)/(1+d)
 
 
-    for k in range(1..n):    # outer loop for different generator steps; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+    for k in range(n):    # outer loop for different generator steps; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         k_start_time = time.time()  # timer for entire generator step
         visualizer.reset()              # reset the visualizer: make sure it saves the results to HTML at least once every epoch
         disc_iters = 0                  # the number of discriminator iterations in current gen. iteration, reset to 0 every time
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         model.optimize_parameters_GW()   # calculate loss functions, get gradients, update network weights
         gen_iters += opt.batch_size
 
-        for j in range(1..d):  # inner loop within one generator step
+        for j in range(d):  # inner loop within one generator step
             j_start_time = time.time()  # timer for computation per discriminator step
 
             data = next(it_dis)

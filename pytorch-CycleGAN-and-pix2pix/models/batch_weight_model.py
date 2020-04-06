@@ -37,7 +37,7 @@ class BatchWeightModel(BaseModel):
         Returns:
             the modified parser.
         """
-        parser.set_defaults(dataset_mode='aligned')  # You can rewrite default values for this model. For example, this model usually uses aligned dataset as its dataset.
+        parser.set_defaults(dataset_mode='unaligned')  # You can rewrite default values for this model. For example, this model usually uses aligned dataset as its dataset.
         if is_train:
             parser.add_argument('--lambda_regression', type=float, default=1.0, help='weight for the regression loss')  # You can define new arguments for this model.
 
@@ -55,6 +55,9 @@ class BatchWeightModel(BaseModel):
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
         # specify the training losses you want to print out. The program will call base_model.get_current_losses to plot the losses to the console and save them to the disk.
+        # loss_G =  [L_min - L_plus]
+        # loss_D = -[L_min - L_plus]
+        # loss_W =  [L_min - L_plus]^2
         self.loss_names = ['loss_G', 'loss_D', 'loss_W']
         
         # specify the images you want to save and display. The program will call base_model.get_current_visuals to save and display these images.
@@ -70,24 +73,25 @@ class BatchWeightModel(BaseModel):
         if self.isTrain:
             self.model_names = ['G_A', 'G_B', 'D', 'W_A', 'W_B']
         else:  # during test time, only load Gs and W
-            self.model_names = ['G_A', 'G_B'] #M? what should I load during test
+            self.model_names = ['G_A', 'G_B'] #M? what should I load during test # Generators is
         
         # define networks; you can use opt.isTrain to specify different behaviors for training and test.
         #M taken from cycleGAN
-        # weight network
-        self.netW_A = networks.define_W(gpu_ids=self.gpu_ids)
-        self.netW_B = networks.define_W(gpu_ids=self.gpu_ids)
+
         #M? check D and Gs architectures
         # generators
         self.netG_A = networks.define__BatchWeight_G(self.gpu_ids)
         self.netG_B = networks.define__BatchWeight_G(self.gpu_ids)
         if self.isTrain:  # define discriminator
             self.netD = networks.define__BatchWeight_D(self.gpu_ids)
+            # A: weight network: only used in training mode
+            self.netW_A = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
+            self.netW_B = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
 
         #M? check losses
         if self.isTrain: # only defined during training time
-            if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
-                assert(opt.input_nc == opt.output_nc)
+            # if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
+            #     assert(opt.input_nc == opt.output_nc)
             self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
             self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
             # define loss
@@ -111,14 +115,15 @@ class BatchWeightModel(BaseModel):
             input: a dictionary that contains the data itself and its metadata information.
         """
         AtoB = self.opt.direction == 'AtoB'  # use <direction> to swap data_A and data_B
-        self.data_A = input['A' if AtoB else 'B'].to(self.device)  # get image data A
-        self.data_B = input['B' if AtoB else 'A'].to(self.device)  # get image data B
+        self.real_A = input['A' if AtoB else 'B'].to(self.device)  # get image data A
+        self.real_B = input['B' if AtoB else 'A'].to(self.device)  # get image data B
         self.image_paths = input['A_paths' if AtoB else 'B_paths']  # get image paths
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
-        self.fake_B = self.netG_A(self.real_A)  # G_xy(x) in the paper
-        self.fake_A = self.netG_B(self.real_B)  # G_yx(y) in the paper
+        input_z = torch.normal(0, 1, size=(1,8))
+        self.fake_B = self.netG_A(self.real_A, input_z)  # G_xy(x) in the paper
+        self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """
@@ -136,7 +141,11 @@ class BatchWeightModel(BaseModel):
         self.loss_W = self.criterionGAN.loss_W(self.L_minus, self.L_plus)
 
         #M calculate the gradients
+        self.set_requires_grad([self.netD, self.netW_A, self.netW_B], False)  # D and Ws require no gradients when optimizing Gs
         self.loss_G.backward()       # calculate gradients of network G w.r.t. loss_G
+
+        self.set_requires_grad([self.netW_A, self.netW_B], True)  # Optimizing Ws now
+        self.set_requires_grad([self.netG_A, self.netG_B], False)  # Gs require no gradients when optimizing Ws
         self.loss_W.backward()
 
     def backward_D(self):
@@ -146,9 +155,11 @@ class BatchWeightModel(BaseModel):
 
         #M calculate the loss
         self.compute_Ls()        # calculate L- and L+
-        self.loss_D = self.criterionGAN.loss_D(self.L_minus, self.L_plus)   #calculate loss
+        self.loss_D = self.criterionGAN.loss_D(self.L_minus, self.L_plus) # calculate loss
 
         #M calculate the gradients
+        self.set_requires_grad([self.netD], True)  # Optimizing D now
+        self.set_requires_grad([self.netW_A, self.netW_B], False) 
         self.loss_D.backward()       # calculate gradients of network G w.r.t. loss_D
 
     def optimize_parameters_GW(self):
@@ -172,3 +183,6 @@ class BatchWeightModel(BaseModel):
         self.backward_D()              # calculate loss and gradients for network D
         
         self.optimizer_D.step()        # update gradients for network D
+
+    def optimize_parameters(self):
+        pass
