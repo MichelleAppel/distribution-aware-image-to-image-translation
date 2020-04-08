@@ -356,21 +356,21 @@ class weighted_GANLoss(nn.Module):
             target_tensor = self.fake_label
         return target_tensor.expand_as(prediction)
 
-    def L_minus(self, A, B):
+    def L_minus(self, discriminated_A, weights):
         #computes L- of the paper
         # A = self.real_A
         # B = self.fake_B
-        AB = self.netG_B(A) # TODO
-        w_a = (nn.sigmoid(self.net_W_A(A)) + nn.sigmoid(-self.net_W_B(AB))) / 2
-        self.L_minus = torch.sum(self.netD(A, B)*w_a)
+        # AB = self.netG_B(A) # TODO
+        # w_a = (nn.Sigmoid(self.net_W_A(A)) + nn.Sigmoid(-self.net_W_B(B))) / 2
+        self.L_minus = torch.sum(discriminated_A*weights)
 
-    def L_plus(self, A, B):
+    def L_plus(self, discriminated_B, weights):
         #computes L- of the paper
         # A = self.fake_A
         # B = self.real_B
-        BA = self.netG_A(B) # TODO
-        w_b = (nn.sigmoid(-self.net_W_A(BA)) + nn.sigmoid(self.net_W_B(B))) / 2
-        self.L_plus = torch.sum(self.netD(A, B)*w_b)
+        # BA = self.netG_A(B) # TODO
+        # w_b = (nn.Sigmoid(-self.net_W_A(A)) + nn.Sigmoid(self.net_W_B(B))) / 2
+        self.L_plus = torch.sum(discriminated_B*weights)
 
     def loss_W(self, L_minus, L_plus):
         """Compute loss for weight network"""
@@ -826,7 +826,7 @@ class DCGANGenerator(nn.Module):
         # Number of channels in the training images. For color images this is 3
         nc = 3
         # Size of z latent vector (i.e. size of generator input)
-        nz = 100
+        nz = 3
         # Size of feature maps in generator
         ngf = 64
         self.main = nn.Sequential(
