@@ -85,8 +85,8 @@ class BatchWeightModel(BaseModel):
         if self.isTrain:  # define discriminator
             self.netD = networks.define__BatchWeight_D(self.gpu_ids)
             # A: weight network: only used in training mode
-        self.netW_A = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
-        self.netW_B = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
+            self.netW_A = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
+            self.netW_B = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
 
         #M? check losses
         if self.isTrain: # only defined during training time
@@ -124,15 +124,16 @@ class BatchWeightModel(BaseModel):
         input_z = torch.normal(0, 1, size=(1,8))
         self.fake_B = self.netG_A(self.real_A, input_z)  # G_xy(x) in the paper
         self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
-        self.weights_A = self.netW_A(self.real_A)
-        self.weights_B = self.netW_B(self.real_B)
-        self.discriminated_A = self.netD(self.real_B, self.fake_B)
-        self.discriminated_B = self.netD(self.fake_A, self.real_B)
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """
-        self.L_minus = self.criterionGAN.L_minus(self.discriminated_A, self.weights_A)
-        self.L_plus = self.criterionGAN.L_plus(self.discriminated_B, self.weights_B)
+        input_z = torch.normal(0, 1, size=(1,8))
+        AB = self.netG_B(self.real_A, input_z) 
+        self.L_minus = self.criterionGAN.L_minus(self.real_A, self.fake_B, AB)
+       
+        input_z = torch.normal(0, 1, size=(1,8))
+        BA = self.netG_A(self.real_B, input_z)
+        self.L_plus = self.criterionGAN.L_minus(self.fake_A, self.real_B, BA)
         
     def backward_GW(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
