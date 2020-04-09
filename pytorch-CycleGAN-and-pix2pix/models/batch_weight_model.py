@@ -124,16 +124,19 @@ class BatchWeightModel(BaseModel):
         input_z = torch.normal(0, 1, size=(1,8))
         self.fake_B = self.netG_A(self.real_A, input_z)  # G_xy(x) in the paper
         self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
+        self.weights_A = self.netW_A(self.real_A)
+        self.weights_B = self.netW_B(self.real_B)
+        self.discriminated_A = self.netD(self.real_A, self.fake_B)
+        self.discriminated_B = self.netD(self.fake_A, self.real_B)
+
+    def compute_Ls(self):
+        
+        self.L_plus = self.criterionGAN.L_plus(self.discriminated_B, self.weights_B)
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """
-        input_z = torch.normal(0, 1, size=(1,8))
-        AB = self.netG_B(self.real_A, input_z) 
-        self.L_minus = self.criterionGAN.L_minus(self.real_A, self.fake_B, AB)
-       
-        input_z = torch.normal(0, 1, size=(1,8))
-        BA = self.netG_A(self.real_B, input_z)
-        self.L_plus = self.criterionGAN.L_minus(self.fake_A, self.real_B, BA)
+        self.L_minus = self.criterionGAN.L_minus(self.discriminated_A, weights_A)
+        self.L_plus = self.criterionGAN.L_minus(self.discriminated_B, weights_B)
         
     def backward_GW(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
