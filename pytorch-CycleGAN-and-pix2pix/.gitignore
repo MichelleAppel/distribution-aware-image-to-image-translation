@@ -1,11 +1,15 @@
 .DS_Store
 debug*
-datasets/
+datasets/numbers/
+datasets/horse2zebra/
 checkpoints/
 results/
 build/
 dist/
 *.png
+*.jpg
+*.mat
+*.gz
 torch.egg-info/
 */**/__pycache__
 torch/version.py
