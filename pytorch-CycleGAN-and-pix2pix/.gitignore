@@ -1,6 +1,7 @@
 .DS_Store
 debug*
 datasets/
+!datasets/download_number_data
 checkpoints/
 results/
 build/
