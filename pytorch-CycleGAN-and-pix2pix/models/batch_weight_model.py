@@ -37,9 +37,10 @@ class BatchWeightModel(BaseModel):
         Returns:
             the modified parser.
         """
+        parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         parser.set_defaults(dataset_mode='unaligned')  # You can rewrite default values for this model. For example, this model usually uses aligned dataset as its dataset.
-        if is_train:
-            parser.add_argument('--lambda_regression', type=float, default=1.0, help='weight for the regression loss')  # You can define new arguments for this model.
+        # if is_train:
+        #     parser.add_argument('--lambda_regression', type=float, default=1.0, help='weight for the regression loss')  # You can define new arguments for this model.
 
         return parser
 
@@ -55,10 +56,7 @@ class BatchWeightModel(BaseModel):
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
         # specify the training losses you want to print out. The program will call base_model.get_current_losses to plot the losses to the console and save them to the disk.
-        # loss_G =  [L_min - L_plus]
-        # loss_D = -[L_min - L_plus]
-        # loss_W =  [L_min - L_plus]^2
-        self.loss_names = ['loss_G', 'loss_D', 'loss_W']
+        self.loss_names = ['G', 'W', 'D']
         
         # specify the images you want to save and display. The program will call base_model.get_current_visuals to save and display these images.
         #M taken from cycleGAN
@@ -72,21 +70,25 @@ class BatchWeightModel(BaseModel):
         # in the paper: G_A: G_xy, G_B: G_yx
         if self.isTrain:
             self.model_names = ['G_A', 'G_B', 'D', 'W_A', 'W_B']
-        else:  # during test time, only load Gs and W
-            self.model_names = ['G_A', 'G_B'] #M? what should I load during test # Generators is
+        else:  # during test time, only load Gs
+            self.model_names = ['G_A', 'G_B'] # No W's during test time
         
         # define networks; you can use opt.isTrain to specify different behaviors for training and test.
         #M taken from cycleGAN
 
         #M? check D and Gs architectures
-        # generators
-        self.netG_A = networks.define__BatchWeight_G(self.gpu_ids)
-        self.netG_B = networks.define__BatchWeight_G(self.gpu_ids)
+        # generators: taken from cyclegan
+        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
+                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
+                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         if self.isTrain:  # define discriminator
-            self.netD = networks.define__BatchWeight_D(self.gpu_ids)
+            self.netD = networks.define_D(opt.output_nc+opt.input_nc, opt.ndf, opt.netD,
+                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+
             # A: weight network: only used in training mode
-            self.netW_A = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
-            self.netW_B = networks.define__BatchWeight_W(gpu_ids=self.gpu_ids)
+            self.netW_A = networks.define_W(gpu_ids=self.gpu_ids, ngf=opt.ngf)
+            self.netW_B = networks.define_W(gpu_ids=self.gpu_ids, ngf=opt.ngf)
 
         #M? check losses
         if self.isTrain: # only defined during training time
@@ -121,22 +123,19 @@ class BatchWeightModel(BaseModel):
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
-        input_z = torch.normal(0, 1, size=(1,8))
-        self.fake_B = self.netG_A(self.real_A, input_z)  # G_xy(x) in the paper
-        self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
+        self.fake_B = self.netG_A(self.real_A)  # G_xy(x) in the paper
+        self.fake_A = self.netG_B(self.real_B)  # G_yx(y) in the paper
+        self.discriminated_A = self.netD(torch.cat((self.real_A, self.fake_B), axis=1))
+        self.discriminated_B = self.netD(torch.cat((self.fake_A, self.real_B), axis=1))
         self.weights_A = self.netW_A(self.real_A)
         self.weights_B = self.netW_B(self.real_B)
-        self.discriminated_A = self.netD(self.real_A, self.fake_B)
-        self.discriminated_B = self.netD(self.fake_A, self.real_B)
-
-    def compute_Ls(self):
-        
-        self.L_plus = self.criterionGAN.L_plus(self.discriminated_B, self.weights_B)
+        self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
+        self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """
-        self.L_minus = self.criterionGAN.L_minus(self.discriminated_A, weights_A)
-        self.L_plus = self.criterionGAN.L_minus(self.discriminated_B, weights_B)
+        self.L_minus = self.criterionGAN.L_minus(self.discriminated_A, self.weights_A)
+        self.L_plus = self.criterionGAN.L_plus(self.discriminated_B, self.weights_B)
         
     def backward_GW(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
@@ -150,11 +149,11 @@ class BatchWeightModel(BaseModel):
 
         #M calculate the gradients
         self.set_requires_grad([self.netD, self.netW_A, self.netW_B], False)  # D and Ws require no gradients when optimizing Gs
-        self.loss_G.backward()       # calculate gradients of network G w.r.t. loss_G
+        self.loss_G.backward(retain_graph=True)       # calculate gradients of network G w.r.t. loss_G
 
         self.set_requires_grad([self.netW_A, self.netW_B], True)  # Optimizing Ws now
         self.set_requires_grad([self.netG_A, self.netG_B], False)  # Gs require no gradients when optimizing Ws
-        self.loss_W.backward()
+        self.loss_W.backward(retain_graph=True)
 
     def backward_D(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
@@ -170,7 +169,7 @@ class BatchWeightModel(BaseModel):
         self.set_requires_grad([self.netW_A, self.netW_B], False) 
         self.loss_D.backward()       # calculate gradients of network G w.r.t. loss_D
 
-    def optimize_parameters_GW(self):
+    def optimize_parameters(self):
         """Update network weights for G and W; it will be called in every training iteration."""
         self.forward()               # first call forward to calculate intermediate results
         
@@ -182,15 +181,12 @@ class BatchWeightModel(BaseModel):
         self.optimizer_G.step()        # update gradients for network G
         self.optimizer_W.step() 
 
-    def optimize_parameters_D(self):
+    # def optimize_parameters_D(self):
         """Update network weights for D; it will be called in every training iteration."""
-        self.forward()               # first call forward to calculate intermediate results
+        # self.forward()               # first call forward to calculate intermediate results
         
         self.optimizer_D.zero_grad()   # clear network D's existing gradients
         
         self.backward_D()              # calculate loss and gradients for network D
         
         self.optimizer_D.step()        # update gradients for network D
-
-    def optimize_parameters(self):
-        pass

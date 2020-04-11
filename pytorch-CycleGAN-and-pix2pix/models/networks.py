@@ -202,46 +202,14 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
     return init_net(net, init_type, init_gain, gpu_ids)
 
-
-def define__BatchWeight_G(gpu_ids=[]):
-    """Create a generator
-
-    Parameters:
-        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
-
-    Returns a weight network
-
-    The generator network is defined in the paper
-    """
-    net = BatchWeightGenerator()
-
-    return init_net(net, gpu_ids=gpu_ids)
-
-def define__BatchWeight_D(gpu_ids=[]):
-    """Create a discriminator
-
-    Parameters:
-        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
-
-    Returns a weight network
-
-    The discriminator network is defined in the paper
-    """
-    net = JointDiscriminator()
-
-    return init_net(net, gpu_ids=gpu_ids)
-
-def define__BatchWeight_W(gpu_ids=[]):
+def define_W(gpu_ids=[], ngf=64):
     """Create a weight network
-
     Parameters:
         gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
-
     Returns a weight network
-
     The weight network is a DC-GAN generator
     """
-    net = DCGANGenerator(len(gpu_ids))
+    net = DCGANDiscriminator(len(gpu_ids))
 
     return init_net(net, gpu_ids=gpu_ids)
 
@@ -319,19 +287,16 @@ class GANLoss(nn.Module):
 
 class weighted_GANLoss(nn.Module):
     """Define different GAN objectives.
-
     The GANLoss class abstracts away the need to create the target label tensor
     that has the same size as the input.
     """
 
     def __init__(self, target_real_label=1.0, target_fake_label=0.0):
         """ Initialize the GANLoss class.
-
         Parameters:
             gan_mode (str) - - the type of GAN objective. It currently supports vanilla, lsgan, and wgangp.
             target_real_label (bool) - - label for a real image
             target_fake_label (bool) - - label of a fake image
-
         Note: Do not use sigmoid as the last layer of Discriminator.
         LSGAN needs no sigmoid. vanilla GANs will handle it with BCEWithLogitsLoss.
         """
@@ -341,11 +306,9 @@ class weighted_GANLoss(nn.Module):
 
     def get_target_tensor(self, prediction, target_is_real):
         """Create label tensors with the same size as the input.
-
         Parameters:
             prediction (tensor) - - tpyically the prediction from a discriminator
             target_is_real (bool) - - if the ground truth label is for real images or fake images
-
         Returns:
             A label tensor filled with ground truth label, and with the size of the input
         """
@@ -362,7 +325,7 @@ class weighted_GANLoss(nn.Module):
         # B = self.fake_B
         # AB = self.netG_B(A) # TODO
         # w_a = (nn.Sigmoid(self.net_W_A(A)) + nn.Sigmoid(-self.net_W_B(B))) / 2
-        self.L_minus = torch.sum(discriminated_A * 0.5*(1+weights))
+        return torch.sum(discriminated_A * 0.5*(1+weights))
 
     def L_plus(self, discriminated_B, weights):
         #computes L- of the paper
@@ -370,7 +333,7 @@ class weighted_GANLoss(nn.Module):
         # B = self.real_B
         # BA = self.netG_A(B) # TODO
         # w_b = (nn.Sigmoid(-self.net_W_A(A)) + nn.Sigmoid(self.net_W_B(B))) / 2
-        self.L_plus = torch.sum(discriminated_B * 0.5*(1+weights))
+        return torch.sum(discriminated_B * 0.5*(1+weights))
 
     def loss_W(self, L_minus, L_plus):
         """Compute loss for weight network"""
@@ -383,7 +346,6 @@ class weighted_GANLoss(nn.Module):
     def loss_D(self, L_minus, L_plus):
         """Compute loss for D network"""
         return - L_minus + L_plus
-
 
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
@@ -448,7 +410,7 @@ class ResnetGenerator(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
 
         model = [nn.ReflectionPad2d(3),
-                 nn.Conv2d(input_nc, ngf, kernel_size=7, padding=1, bias=use_bias),
+                 nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
                  norm_layer(ngf),
                  nn.ReLU(True)]
 
@@ -473,7 +435,7 @@ class ResnetGenerator(nn.Module):
                       norm_layer(int(ngf * mult / 2)),
                       nn.ReLU(True)]
         model += [nn.ReflectionPad2d(3)]
-        model += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=1)]
+        model += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
         model += [nn.Tanh()]
 
         self.model = nn.Sequential(*model)
@@ -603,7 +565,7 @@ class UnetSkipConnectionBlock(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
         if input_nc is None:
             input_nc = outer_nc
-        downconv = nn.Conv2d(input_nc, inner_nc, kernel_size=3,
+        downconv = nn.Conv2d(input_nc, inner_nc, kernel_size=4,
                              stride=2, padding=1, bias=use_bias)
         downrelu = nn.LeakyReLU(0.2, True)
         downnorm = norm_layer(inner_nc)
@@ -612,21 +574,21 @@ class UnetSkipConnectionBlock(nn.Module):
 
         if outermost:
             upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
-                                        kernel_size=3, stride=2,
+                                        kernel_size=4, stride=2,
                                         padding=1)
             down = [downconv]
             up = [uprelu, upconv, nn.Tanh()]
             model = down + [submodule] + up
         elif innermost:
             upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
-                                        kernel_size=3, stride=2,
+                                        kernel_size=4, stride=2,
                                         padding=1, bias=use_bias)
             down = [downrelu, downconv]
             up = [uprelu, upconv, upnorm]
             model = down + up
         else:
             upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
-                                        kernel_size=3, stride=2,
+                                        kernel_size=4, stride=2,
                                         padding=1, bias=use_bias)
             down = [downrelu, downconv, downnorm]
             up = [uprelu, upconv, upnorm]
@@ -711,12 +673,12 @@ class PixelDiscriminator(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
 
         self.net = [
-            nn.Conv2d(input_nc, ndf, kernel_size=1, stride=1, padding=1),
+            nn.Conv2d(input_nc, ndf, kernel_size=1, stride=1, padding=0),
             nn.LeakyReLU(0.2, True),
-            nn.Conv2d(ndf, ndf * 2, kernel_size=1, stride=1, padding=1, bias=use_bias),
+            nn.Conv2d(ndf, ndf * 2, kernel_size=1, stride=1, padding=0, bias=use_bias),
             norm_layer(ndf * 2),
             nn.LeakyReLU(0.2, True),
-            nn.Conv2d(ndf * 2, 1, kernel_size=1, stride=1, padding=1, bias=use_bias)]
+            nn.Conv2d(ndf * 2, 1, kernel_size=1, stride=1, padding=0, bias=use_bias)]
 
         self.net = nn.Sequential(*self.net)
 
@@ -724,135 +686,37 @@ class PixelDiscriminator(nn.Module):
         """Standard forward."""
         return self.net(input)
 
-
-class JointDiscriminator(nn.Module):
-    """Defines a joint discriminator"""
-
-    def __init__(self, input_nc=3, ndf=32, kernel_size=5):
-        """Construct a joint discriminator
-
-        Parameters:
-            input_nc (int)  -- the number of channels in input images
-            ndf (int)       -- the number of filters in the last conv layer
-        """
-        super(JointDiscriminator, self).__init__()
-
-        self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=3, stride=2, padding=1)
-        self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=3, stride=2, padding=1)
-        self.c_x3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=3, stride=2, padding=1)
-
-        self.c_xy1 = nn.Conv2d(input_nc*2, ndf*2, kernel_size=3, stride=2, padding=1)
-        self.c_xy2 = nn.Conv2d(ndf*4, ndf*2, kernel_size=3, stride=2, padding=1)
-        self.resBlock = ResnetBlock(128, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
-
-        self.c_xy3 = nn.Conv2d(ndf * 4, ndf * 8, kernel_size=3, stride=2, padding=1)
-        self.c_xy4 = nn.Conv2d(ndf * 4, ndf * 8, kernel_size=3, stride=2, padding=1)
-        self.fcl1 = nn.Linear(1024, 256)
-        self.fcl2 = nn.Linear(256, 1)
-
-        self.c_y1 = nn.Conv2d(input_nc, ndf, kernel_size=3, stride=2, padding=1)
-        self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=3, stride=2, padding=1)
-        self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=3, stride=2, padding=1)
-
-    def forward(self, input_x, input_y):
-        """Standard forward."""
-        x1 = self.c_x1(input_x)
-        x2 = self.c_x2(x1)
-        x3 = self.c_x3(x2)
-
-        y1 = self.c_y1(input_y)
-        y2 = self.c_y2(y1)
-        y3 = self.c_y3(y2)
-
-        xy = torch.cat((input_x, input_y), dim = 1) #M? not sure how to concatenate
-        xy1 = self.c_xy1(xy)
-        xy1 = torch.cat((x1, xy1, y1), dim = 1)
-        xy2 = self.c_xy2(xy1)
-        xy2 = torch.cat((x2, xy2, y2), dim = 1)
-        xy2 = self.resBlock(xy2)
-        xy2 = self.resBlock(xy2)
-        xy3 = self.c_xy3(xy2)
-        xy3 = torch.cat((x3, xy3, y3), dim = 1)
-        xy3 = self.c_xy4(xy3)
-        xy3 = self.fcl1(xy3) 
-        xy3 = self.fcl2(xy3) 
-        
-        return xy3
-
-class BatchWeightGenerator(nn.Module):
-    """Defines a generator from the paper"""
-
-    def __init__(self, input_nc=3, ndf=32, s=2, K=3, c=3):
-        """Construct a joint discriminator
-
-        Parameters:
-            input_nc (int)  -- the number of channels in input images
-            ndf (int)       -- the number of filters in the last conv layer
-        """
-        super(BatchWeightGenerator, self).__init__()
-        
-        self.s = s
-
-        self.c_x1 = nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=1)
-        self.resBlock = ResnetBlock(64, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
-        self.c_x2 = nn.Conv2d(ndf * 2, ndf * 2, kernel_size=1, stride=1, padding=0)
-
-        self.c_xz1 = nn.Conv2d(64 , ndf*2, kernel_size=K, stride=1, padding=1) # + int(32/s)
-        self.ct_xz1 = nn.ConvTranspose2d(64, c, kernel_size=4, stride=s, padding=1)
-
-    def forward(self, input_x, input_z):
-        """Standard forward."""
-
-        x1 = self.c_x1(input_x)
-        x1 = self.resBlock(x1)
-        x1 = self.resBlock(x1)
-        x1 = self.c_x2(x1)
-
-        z1 = input_z#.repeat(32/self.s, 32/self.s)
-        # print(z1.shape, x1.shape)
-
-        # xz = torch.cat((x1, z1), dim = 2) #M? not sure how to concatenate
-        xz = self.c_xz1(x1)
-        xz = self.resBlock(xz)
-        xz = self.resBlock(xz)
-        xz = self.ct_xz1(xz)
-        
-        return xz
-
-class DCGANGenerator(nn.Module):
+class DCGANDiscriminator(nn.Module):
     """DCGAN Generator Code. Used as weight network in the paper"""
 
-    def __init__(self, ngpu):
-        super(DCGANGenerator, self).__init__()
+    def __init__(self, ngpu, nc=3, ndf=64):
+        super(DCGANDiscriminator, self).__init__()
         self.ngpu = ngpu
-        # Number of channels in the training images. For color images this is 3
-        nc = 3
-        # Size of z latent vector (i.e. size of generator input)
-        nz = 3
-        # Size of feature maps in generator
-        ngf = 64
         self.main = nn.Sequential(
-            # input is Z, going into a convolution
-            nn.ConvTranspose2d( nz, ngf * 8, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(True),
-            # state size. (ngf*8) x 4 x 4
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(True),
-            # state size. (ngf*4) x 8 x 8
-            nn.ConvTranspose2d( ngf * 4, ngf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(True),
-            # state size. (ngf*2) x 16 x 16
-            nn.ConvTranspose2d( ngf * 2, ngf, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
-            # state size. (ngf) x 32 x 32
-            nn.ConvTranspose2d( ngf, nc, 4, 2, 1, bias=False),
-            nn.Tanh()
-            # state size. (nc) x 64 x 64
+            # input is (nc) x 64 x 64
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            nn.Sigmoid()
         )
 
     def forward(self, input):
-        return self.main(input)
+        if input.is_cuda and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        else:
+            output = self.main(input)
+
+        return output.view(-1, 1).squeeze(1)

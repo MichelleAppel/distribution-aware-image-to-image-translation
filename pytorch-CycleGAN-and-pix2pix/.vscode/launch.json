@@ -6,14 +6,23 @@
     "configurations": [
 
 
-
+    
         {
-            "name": "Python: train.py",
+            "name": "Python: cyclegan train.py",
             "type": "python",
             "request": "launch",
             "program": "train.py",
             "console": "integratedTerminal",
-            "args":["--model", "batch_weight", "--dataroot" , "datasets/horse2zebra", "--gpu_ids", "-1"]//, "--crop_size", "32"]
+            "args":["--model", "cycle_gan", "--dataroot" , "datasets/numbers"]
+        }
+
+        {
+            "name": "Python: batchweight train.py",
+            "type": "python",
+            "request": "launch",
+            "program": "train.py",
+            "console": "integratedTerminal",
+            "args":["--model", "batch_weight", "--dataroot" , "datasets/numbers"]
         }
     ]
 }
