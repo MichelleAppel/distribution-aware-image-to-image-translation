@@ -12,7 +12,8 @@ if [[ $FILE == "cityscapes" ]]; then
 fi
 
 if [[ $FILE == "numbers" || $FILE == "SVHN2MNIST" || $FILE == "MNIST2SVHN" ]]; then
-    bash ./datasets/download_number_data/download_number_data.sh
+    bash ./datasets/download_SVHN.sh
+    bash ./datasets/download_MNIST.sh
 else
     echo "Specified [$FILE]"
     URL=https://people.eecs.berkeley.edu/~taesung_park/CycleGAN/datasets/$FILE.zip
