@@ -41,7 +41,7 @@ class BatchWeightModel(BaseModel):
         parser.set_defaults(dataset_mode='unaligned')  # You can rewrite default values for this model. For example, this model usually uses aligned dataset as its dataset.
         # if is_train:
         #     parser.add_argument('--lambda_regression', type=float, default=1.0, help='weight for the regression loss')  # You can define new arguments for this model.
-
+        parser.set_defaults(netD='joint')
         return parser
 
     def __init__(self, opt):
@@ -60,8 +60,8 @@ class BatchWeightModel(BaseModel):
         
         # specify the images you want to save and display. The program will call base_model.get_current_visuals to save and display these images.
         #M taken from cycleGAN
-        visual_names_A = ['real_A', 'fake_B', 'rec_A']
-        visual_names_B = ['real_B', 'fake_A', 'rec_B']
+        visual_names_A = ['real_A', 'fake_B', 'rec_A', 'idt_A']
+        visual_names_B = ['real_B', 'fake_A', 'rec_B', 'idt_B']
         self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
         
         # specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks to save and load networks.
@@ -83,8 +83,8 @@ class BatchWeightModel(BaseModel):
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         if self.isTrain:  # define discriminator
-            self.netD = networks.define_D(opt.output_nc+opt.input_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+            self.netD = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
+                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids, opt.output_nc)
 
             # A: weight network: only used in training mode
             self.netW_A = networks.define_W(gpu_ids=self.gpu_ids, ngf=opt.ngf)
@@ -125,12 +125,14 @@ class BatchWeightModel(BaseModel):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG_A(self.real_A)  # G_xy(x) in the paper
         self.fake_A = self.netG_B(self.real_B)  # G_yx(y) in the paper
-        self.discriminated_A = self.netD(torch.cat((self.real_A, self.fake_B), axis=1))
-        self.discriminated_B = self.netD(torch.cat((self.fake_A, self.real_B), axis=1))
+        self.discriminated_A = self.netD(self.real_A, self.fake_B)
+        self.discriminated_B = self.netD(self.fake_A, self.real_B)
         self.weights_A = self.netW_A(self.real_A)
         self.weights_B = self.netW_B(self.real_B)
         self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
         self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
+        self.idt_A = self.netG_A(self.real_B)
+        self.idt_B = self.netG_B(self.real_A)
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """

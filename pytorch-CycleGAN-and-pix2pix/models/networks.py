@@ -159,13 +159,13 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     return init_net(net, init_type, init_gain, gpu_ids)
 
 
-def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal', init_gain=0.02, gpu_ids=[], output_nc=3):
     """Create a discriminator
 
     Parameters:
         input_nc (int)     -- the number of channels in input images
         ndf (int)          -- the number of filters in the first conv layer
-        netD (str)         -- the architecture's name: basic | n_layers | pixel
+        netD (str)         -- the architecture's name: basic | n_layers | pixel | joint
         n_layers_D (int)   -- the number of conv layers in the discriminator; effective when netD=='n_layers'
         norm (str)         -- the type of normalization layers used in the network.
         init_type (str)    -- the name of the initialization method.
@@ -198,6 +198,8 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         net = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer)
     elif netD == 'pixel':     # classify if each pixel is real or fake
         net = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer)
+    elif netD == 'joint':
+        net = JointDiscriminator(input_nc, output_nc, ndf)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -685,6 +687,59 @@ class PixelDiscriminator(nn.Module):
     def forward(self, input):
         """Standard forward."""
         return self.net(input)
+
+class JointDiscriminator(nn.Module):
+    """Defines a joint discriminator"""
+
+    def __init__(self, input_nc=3, output_nc=3, ndf=32):
+        """Construct a joint discriminator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+        """
+        super(JointDiscriminator, self).__init__()
+        ndf = 32
+
+        self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=5, stride=2, padding=0)
+        self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=5, stride=2, padding=0)
+        self.c_x3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
+
+        self.c_xy1 = nn.Conv2d(output_nc+input_nc, ndf*2, kernel_size=5, stride=2, padding=0)
+        self.c_xy2 = nn.Conv2d(ndf * 4, 128, kernel_size=5, stride=2, padding=0)
+        self.resBlock = ResnetBlock(256, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
+        self.c_xy3 = nn.Conv2d(ndf * 8, ndf * 8, kernel_size=5, stride=2, padding=0)
+        self.c_xy4 = nn.Conv2d(ndf * 16, ndf * 32, kernel_size=5, stride=2, padding=0) # TODO
+        self.fcl1 = nn.Linear(1024, 256)
+        self.fcl2 = nn.Linear(256, 1)
+
+        self.c_y1 = nn.Conv2d(output_nc, ndf, kernel_size=5, stride=2, padding=0)
+        self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=5, stride=2, padding=0)
+        self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
+
+    def forward(self, input_x, input_y):
+        """Standard forward."""
+        x1 = self.c_x1(input_x)
+        x2 = self.c_x2(x1)
+        x3 = self.c_x3(x2)
+
+        y1 = self.c_y1(input_y)
+        y2 = self.c_y2(y1)
+        y3 = self.c_y3(y2)
+
+        xy = torch.cat((input_x, input_y), dim = 1) #M? not sure how to concatenate
+        xy1 = self.c_xy1(xy)
+        xy1 = torch.cat((x1, xy1, y1), dim = 1) # 128
+        xy2 = self.c_xy2(xy1)
+        xy2 = torch.cat((x2, xy2, y2), dim = 1) # 256
+        xy2 = self.resBlock(xy2)
+        xy2 = self.resBlock(xy2)
+        xy3 = self.c_xy3(xy2)
+        xy3 = torch.cat((x3, xy3, y3), dim = 1)
+        xy3 = self.c_xy4(xy3)
+        xy3 = self.fcl1(xy3.view(-1, 1024)) # TODO
+        xy3 = self.fcl2(xy3) 
+
+        return xy3
 
 class DCGANDiscriminator(nn.Module):
     """DCGAN Generator Code. Used as weight network in the paper"""
