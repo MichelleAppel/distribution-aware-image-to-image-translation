@@ -716,28 +716,31 @@ class JointDiscriminator(nn.Module):
         self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=5, stride=2, padding=0)
         self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
 
+        self.ReLU = nn.LeakyReLU(0.2, True)
+        self.Sigmoid = nn.Sigmoid()
+
     def forward(self, input_x, input_y):
         """Standard forward."""
-        x1 = self.c_x1(input_x)
-        x2 = self.c_x2(x1)
-        x3 = self.c_x3(x2)
+        x1 = self.ReLU(self.c_x1(input_x))
+        x2 = self.ReLU(self.c_x2(x1))
+        x3 = self.ReLU(self.c_x3(x2))
 
-        y1 = self.c_y1(input_y)
-        y2 = self.c_y2(y1)
-        y3 = self.c_y3(y2)
+        y1 = self.ReLU(self.c_y1(input_y))
+        y2 = self.ReLU(self.c_y2(y1))
+        y3 = self.ReLU(self.c_y3(y2))
 
         xy = torch.cat((input_x, input_y), dim = 1) #M? not sure how to concatenate
-        xy1 = self.c_xy1(xy)
+        xy1 = self.ReLU(self.c_xy1(xy))
         xy1 = torch.cat((x1, xy1, y1), dim = 1) # 128
-        xy2 = self.c_xy2(xy1)
+        xy2 = self.ReLU(self.c_xy2(xy1))
         xy2 = torch.cat((x2, xy2, y2), dim = 1) # 256
         xy2 = self.resBlock(xy2)
         xy2 = self.resBlock(xy2)
-        xy3 = self.c_xy3(xy2)
+        xy3 = self.ReLU(self.c_xy3(xy2))
         xy3 = torch.cat((x3, xy3, y3), dim = 1)
-        xy3 = self.c_xy4(xy3)
-        xy3 = self.fcl1(xy3.view(-1, 1024)) # TODO
-        xy3 = self.fcl2(xy3) 
+        xy3 = self.ReLU(self.c_xy4(xy3))
+        xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024))) # TODO
+        xy3 = self.Sigmoid(self.fcl2(xy3))
 
         return xy3
 
