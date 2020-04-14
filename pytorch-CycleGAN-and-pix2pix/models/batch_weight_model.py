@@ -141,13 +141,6 @@ class BatchWeightModel(BaseModel):
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """
-        # self.L_minus_D = self.criterionGAN.L_minus(self.netD(self.real_A, self.fake_B.detach()), self.weights_A.detach())
-        # self.L_plus_D = self.criterionGAN.L_plus(self.netD(self.fake_A.detach(), self.real_B), self.weights_B.detach())
-        # self.L_minus_G = self.criterionGAN.L_minus(self.netD(self.real_A, self.fake_B), self.weights_A.detach())
-        # self.L_plus_G = self.criterionGAN.L_plus(self.netD(self.fake_A, self.real_B), self.weights_B.detach())
-        # self.L_minus_W = self.criterionGAN.L_minus(self.discriminated_A.detach(), 0.5*(self.Sigmoid(self.w_real_A) + self.Sigmoid(-self.netW_A(self.fake_A.detach()))))
-        # self.L_plus_W = self.criterionGAN.L_plus(self.discriminated_B.detach(), 0.5*(self.Sigmoid(-self.w_real_B) + self.Sigmoid(self.netW_B(self.fake_B.detach()))))
-        
         self.L_minus = self.criterionGAN.L_minus(self.discriminated_A, self.weights_A)
         self.L_plus = self.criterionGAN.L_plus(self.discriminated_B, self.weights_B)
 

@@ -717,7 +717,7 @@ class JointDiscriminator(nn.Module):
         self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
 
         self.ReLU = nn.LeakyReLU(0.2, True)
-        self.Sigmoid = nn.Sigmoid()
+        self.Sigmoid = nn.Tanh()
 
     def forward(self, input_x, input_y):
         """Standard forward."""
@@ -768,7 +768,7 @@ class DCGANDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
             nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            nn.Sigmoid()
+            # nn.Sigmoid()
         )
 
     def forward(self, input):
