@@ -56,7 +56,7 @@ class BatchWeightModel(BaseModel):
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
         # specify the training losses you want to print out. The program will call base_model.get_current_losses to plot the losses to the console and save them to the disk.
-        self.loss_names = ['G', 'W', 'D']
+        self.loss_names = ['G', 'W', 'D', 'minus', 'plus']
         
         # specify the images you want to save and display. The program will call base_model.get_current_visuals to save and display these images.
         #M taken from cycleGAN
@@ -138,8 +138,8 @@ class BatchWeightModel(BaseModel):
             self.w_real_B = self.netW_B(self.real_B)
             self.w_fake_B = self.netW_B(self.fake_B)
             self.Sigmoid = nn.Sigmoid()
-            self.weights_A = 0.5*(self.Sigmoid(self.w_real_A) + self.Sigmoid(-self.w_fake_B))
-            self.weights_B = 0.5*(self.Sigmoid(-self.w_fake_A) + self.Sigmoid(self.w_real_B))
+            self.weights_A = 1#0.5*(self.Sigmoid(self.w_real_A) + self.Sigmoid(-self.w_fake_B))
+            self.weights_B = 1#0.5*(self.Sigmoid(-self.w_fake_A) + self.Sigmoid(self.w_real_B))
         
         input_z = torch.normal(0, 1, size=self.z_size)
         self.rec_A = self.netG_B(self.fake_B, input_z)   # G_B(G_A(A))
@@ -154,6 +154,8 @@ class BatchWeightModel(BaseModel):
         """Computes L- and L+ of the paper """
         self.L_minus = self.criterionGAN.L_minus(self.discriminated_A, self.weights_A)
         self.L_plus = self.criterionGAN.L_plus(self.discriminated_B, self.weights_B)
+        self.loss_minus = self.L_minus
+        self.loss_plus = self.L_plus
 
     def backward_GW(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
@@ -163,16 +165,16 @@ class BatchWeightModel(BaseModel):
         #M calculate the loss
         self.compute_Ls()        # calculate L- and L+
         self.loss_G = self.criterionGAN.loss_G(self.L_minus, self.L_plus)
-        self.loss_W = self.criterionGAN.loss_W(self.L_minus, self.L_plus)
+        self.loss_W = 1#self.criterionGAN.loss_W(self.L_minus, self.L_plus)
 
         #M calculate the gradients
         self.set_requires_grad([self.netG_A, self.netG_B], True)  # Optimizing Gs now
         self.set_requires_grad([self.netD, self.netW_A, self.netW_B], False)  # D and Ws require no gradients when optimizing Gs
         self.loss_G.backward(retain_graph=True)       # calculate gradients of network G w.r.t. loss_G
 
-        self.set_requires_grad([self.netW_A, self.netW_B], True)  # Optimizing Ws now
-        self.set_requires_grad([self.netG_A, self.netG_B, self.netD], False)  # Gs require no gradients when optimizing Ws
-        self.loss_W.backward(retain_graph=True)
+        # self.set_requires_grad([self.netW_A, self.netW_B], True)  # Optimizing Ws now
+        # self.set_requires_grad([self.netG_A, self.netG_B, self.netD], False)  # Gs require no gradients when optimizing Ws
+        # self.loss_W.backward(retain_graph=True)
 
     def backward_D(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
@@ -180,47 +182,28 @@ class BatchWeightModel(BaseModel):
         # calculate loss given the input and intermediate results
 
         #M calculate the loss
-        # self.compute_Ls()        # calculate L- and L+
+        self.compute_Ls()        # calculate L- and L+
         self.loss_D = self.criterionGAN.loss_D(self.L_minus, self.L_plus) # calculate loss
 
         #M calculate the gradients
         self.set_requires_grad([self.netD], True)  # Optimizing D now
         self.set_requires_grad([self.netW_A, self.netW_B, self.netG_A, self.netG_B], False) 
-        self.loss_D.backward(retain_graph=True)       # calculate gradients of network G w.r.t. loss_D
+        self.loss_D.backward()       # calculate gradients of network G w.r.t. loss_D
 
     def optimize_parameters(self):
-        """Update network weights for G and W; it will be called in every training iteration."""
-        self.forward()               # first call forward to calculate intermediate results
-        
-        self.optimizer_G.zero_grad()   # clear networks existing gradients
-        self.optimizer_W.zero_grad()
-        
-        self.backward_GW()              # calculate loss and gradients for network G and W
-        
-        self.optimizer_G.step()        # update gradients for network G
-        self.optimizer_W.step() 
-
-    # def optimize_parameters_D(self):
-        """Update network weights for D; it will be called in every training iteration."""
-        # self.forward()               # first call forward to calculate intermediate results
-        
-        self.optimizer_D.zero_grad()   # clear network D's existing gradients
-        
-        self.backward_D()              # calculate loss and gradients for network D
-        
-        self.optimizer_D.step()        # update gradients for network D
+        pass
 
     def optimize_parameters_GW(self):
         """Update network weights for G and W; it will be called in every training iteration."""
         self.forward()               # first call forward to calculate intermediate results
         
         self.optimizer_G.zero_grad()   # clear networks existing gradients
-        self.optimizer_W.zero_grad()
+        # self.optimizer_W.zero_grad()
         
         self.backward_GW()              # calculate loss and gradients for network G and W
         
         self.optimizer_G.step()        # update gradients for network G
-        self.optimizer_W.step() 
+        # self.optimizer_W.step() 
 
     def optimize_parameters_D(self):
         """Update network weights for D; it will be called in every training iteration."""
