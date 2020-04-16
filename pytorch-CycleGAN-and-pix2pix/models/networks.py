@@ -940,7 +940,7 @@ class BatchWeightGenerator(nn.Module):
         x1 = self.c_x2(x1)
         x1 = self.ReLU(x1)
 
-        z1 = input_z.repeat((1, int(32/self.s), int(32/self.s), 1)).permute((0, 3, 1, 2))
+        z1 = input_z.repeat((1, 1, int(32/self.s), int(32/self.s)))
 
         #print(input_x.size())
         #print(input_z.size())

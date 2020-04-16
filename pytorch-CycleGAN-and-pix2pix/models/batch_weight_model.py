@@ -120,12 +120,14 @@ class BatchWeightModel(BaseModel):
         self.real_A = input['A' if AtoB else 'B'].to(self.device)  # get image data A
         self.real_B = input['B' if AtoB else 'A'].to(self.device)  # get image data B
         self.image_paths = input['A_paths' if AtoB else 'B_paths']  # get image paths
+        self.batch_size = self.real_A.shape[0]
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
-        input_z = torch.normal(0, 1, size=(1,8))
+        self.z_size = (self.batch_size, 8, 1, 1)
+        input_z = torch.normal(0, 1, size=self.z_size)
         self.fake_B = self.netG_A(self.real_A, input_z)  # G_xy(x) in the paper
-        input_z = torch.normal(0, 1, size=(1,8))
+        input_z = torch.normal(0, 1, size=self.z_size)
         self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
 
         if self.isTrain:
@@ -139,13 +141,13 @@ class BatchWeightModel(BaseModel):
             self.weights_A = 0.5*(self.Sigmoid(self.w_real_A) + self.Sigmoid(-self.w_fake_B))
             self.weights_B = 0.5*(self.Sigmoid(-self.w_fake_A) + self.Sigmoid(self.w_real_B))
         
-        input_z = torch.normal(0, 1, size=(1,8))
+        input_z = torch.normal(0, 1, size=self.z_size)
         self.rec_A = self.netG_B(self.fake_B, input_z)   # G_B(G_A(A))
-        input_z = torch.normal(0, 1, size=(1,8))
+        input_z = torch.normal(0, 1, size=self.z_size)
         self.rec_B = self.netG_A(self.fake_A, input_z)   # G_A(G_B(B))
-        input_z = torch.normal(0, 1, size=(1,8))
+        input_z = torch.normal(0, 1, size=self.z_size)
         self.idt_A = self.netG_A(self.real_B, input_z)
-        input_z = torch.normal(0, 1, size=(1,8))
+        input_z = torch.normal(0, 1, size=self.z_size)
         self.idt_B = self.netG_B(self.real_A, input_z)
 
     def compute_Ls(self):
@@ -184,7 +186,7 @@ class BatchWeightModel(BaseModel):
         #M calculate the gradients
         self.set_requires_grad([self.netD], True)  # Optimizing D now
         self.set_requires_grad([self.netW_A, self.netW_B, self.netG_A, self.netG_B], False) 
-        self.loss_D.backward()       # calculate gradients of network G w.r.t. loss_D
+        self.loss_D.backward(retain_graph=True)       # calculate gradients of network G w.r.t. loss_D
 
     def optimize_parameters(self):
         """Update network weights for G and W; it will be called in every training iteration."""
