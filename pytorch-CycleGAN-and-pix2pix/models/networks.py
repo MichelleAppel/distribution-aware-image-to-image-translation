@@ -215,6 +215,34 @@ def define_W(gpu_ids=[], ngf=64):
 
     return init_net(net, gpu_ids=gpu_ids)
 
+def define_BatchWeight_G(gpu_ids=[]):
+    """Create a generator
+
+    Parameters:
+        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
+
+    Returns a weight network
+
+    The generator network is defined in the paper
+    """
+    net = BatchWeightGenerator()
+
+    return init_net(net, gpu_ids=gpu_ids)
+
+def define_BatchWeight_D(gpu_ids=[]):
+    """Create a discriminator
+
+    Parameters:
+        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
+
+    Returns a weight network
+
+    The discriminator network is defined in the paper
+    """
+    net = JointDiscriminator()
+
+    return init_net(net, gpu_ids=gpu_ids)
+
 
 ##############################################################################
 # Classes
@@ -700,6 +728,67 @@ class JointDiscriminator(nn.Module):
         super(JointDiscriminator, self).__init__()
         ndf = 32
 
+        self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=4, stride=2, padding=3)
+        self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
+        self.c_x3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
+
+        self.c_xy1 = nn.Conv2d(output_nc+input_nc, ndf*2, kernel_size=4, stride=2, padding=3)
+        self.c_xy2 = nn.Conv2d(ndf * 4, 128, kernel_size=4, stride=2, padding=0)
+        self.resBlock = ResnetBlock(256, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
+        self.c_xy3 = nn.Conv2d(ndf * 8, ndf * 8, kernel_size=4, stride=2, padding=1)
+        self.c_xy4 = nn.Conv2d(ndf * 16, ndf * 32, kernel_size=4, stride=2, padding=0) # TODO
+        self.fcl1 = nn.Linear(1024, 256)
+        self.fcl2 = nn.Linear(256, 1)
+
+        self.c_y1 = nn.Conv2d(output_nc, ndf, kernel_size=4, stride=2, padding=3)
+        self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
+        self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
+
+        self.ReLU = nn.LeakyReLU(0.2, True)
+        self.Sigmoid = nn.Tanh()
+
+    def forward(self, input_x, input_y):
+        """Standard forward."""
+        x1 = self.ReLU(self.c_x1(input_x))
+        x2 = self.ReLU(self.c_x2(x1))
+        x3 = self.ReLU(self.c_x3(x2))
+
+        y1 = self.ReLU(self.c_y1(input_y))
+        y2 = self.ReLU(self.c_y2(y1))
+        y3 = self.ReLU(self.c_y3(y2))
+
+        #print(input_x.size())
+        #print(input_y.size())
+        xy = torch.cat((input_x, input_y), dim = 1) #M? not sure how to concatenate
+        xy1 = self.ReLU(self.c_xy1(xy))
+        xy1 = torch.cat((x1, xy1, y1), dim = 1) # 128
+        xy2 = self.ReLU(self.c_xy2(xy1))
+        xy2 = torch.cat((x2, xy2, y2), dim = 1) # 256
+        #print(xy2.size())
+        xy2 = self.resBlock(xy2)
+        xy2 = self.resBlock(xy2)
+        #print(xy2.size())
+        xy3 = self.ReLU(self.c_xy3(xy2))
+        xy3 = torch.cat((x3, xy3, y3), dim = 1)
+        #print(xy3.size())
+        xy3 = self.ReLU(self.c_xy4(xy3))
+        xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024))) # TODO
+        xy3 = self.Sigmoid(self.fcl2(xy3))
+
+        return xy3
+
+class JointDiscriminator_old(nn.Module):
+    """Defines a joint discriminator"""
+
+    def __init__(self, input_nc=3, output_nc=3, ndf=32):
+        """Construct a joint discriminator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+        """
+        super(JointDiscriminator, self).__init__()
+        ndf = 32
+
         self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=5, stride=2, padding=0)
         self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=5, stride=2, padding=0)
         self.c_x3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
@@ -763,6 +852,42 @@ class DCGANDiscriminator(nn.Module):
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 0, bias=False),
+            #nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            # nn.Sigmoid()
+        )
+
+    def forward(self, input):
+        if input.is_cuda and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        else:
+            output = self.main(input)
+            #print(output.size())
+
+        return output.view(-1, 1).squeeze(1)
+
+class DCGANDiscriminator_original(nn.Module):
+    """DCGAN Generator Code. Used as weight network in the paper"""
+
+    def __init__(self, ngpu, nc=3, ndf=64):
+        super(DCGANDiscriminator, self).__init__()
+        self.ngpu = ngpu
+        self.main = nn.Sequential(
+            # input is (nc) x 64 x 64
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 8 x 8
             nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
@@ -778,3 +903,56 @@ class DCGANDiscriminator(nn.Module):
             output = self.main(input)
 
         return output.view(-1, 1).squeeze(1)
+
+        
+
+class BatchWeightGenerator(nn.Module):
+    """Defines a generator from the paper"""
+
+    def __init__(self, input_nc=3, ndf=32, s=2, K=4, c=3):
+        """Construct a joint discriminator
+
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+        """
+        super(BatchWeightGenerator, self).__init__()
+        
+        self.s = s
+        self.d = 8
+
+        self.c_x1 = nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=1)
+        self.resBlock = ResnetBlock(64, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
+        self.c_x2 = nn.Conv2d(ndf * 2, ndf * 2, kernel_size=1, stride=1, padding=0)
+
+        self.c_xz1 = nn.Conv2d(ndf * 2 + self.d , ndf*2, kernel_size=1, stride=1, padding=0) # + int(32/s)
+        self.ct_xz1 = nn.ConvTranspose2d(64, c, kernel_size=K, stride=s, padding=1)
+
+        self.ReLU = nn.ReLU(True)
+
+    def forward(self, input_x, input_z):
+        """Standard forward."""
+
+        x1 = self.c_x1(input_x)
+        x1 = self.ReLU(x1)
+        x1 = self.resBlock(x1)
+        x1 = self.resBlock(x1)
+        x1 = self.c_x2(x1)
+        x1 = self.ReLU(x1)
+
+        z1 = input_z.repeat((1, int(32/self.s), int(32/self.s), 1)).permute((0, 3, 1, 2))
+
+        #print(input_x.size())
+        #print(input_z.size())
+        #print(x1.size())
+        #print(z1.size())
+        xz = torch.cat((x1, z1), dim = 1) #M? not sure how to concatenate
+        xz = self.c_xz1(xz)
+        xz = self.ReLU(xz)
+        xz = self.resBlock(xz)
+        xz = self.resBlock(xz)
+        xz = self.ct_xz1(xz)
+        xz = self.ReLU(xz)
+        #print(xz.size())
+        
+        return xz

@@ -78,13 +78,13 @@ class BatchWeightModel(BaseModel):
 
         #M? check D and Gs architectures
         # generators: taken from cyclegan
-        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
-                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
-                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netG_A = networks.define_BatchWeight_G(self.gpu_ids)
+                    #networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netG_B = networks.define_BatchWeight_G(self.gpu_ids)
+                    #networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         if self.isTrain:  # define discriminator
-            self.netD = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids, opt.output_nc)
+            self.netD = networks.define_BatchWeight_D(self.gpu_ids)
+                    #define_D(opt.input_nc, opt.ndf, opt.netD, opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids, opt.output_nc)
 
             # A: weight network: only used in training mode
             self.netW_A = networks.define_W(gpu_ids=self.gpu_ids, ngf=opt.ngf)
@@ -123,21 +123,30 @@ class BatchWeightModel(BaseModel):
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
-        self.fake_B = self.netG_A(self.real_A)  # G_xy(x) in the paper
-        self.fake_A = self.netG_B(self.real_B)  # G_yx(y) in the paper
-        self.discriminated_A = self.netD(self.real_A, self.fake_B)
-        self.discriminated_B = self.netD(self.fake_A, self.real_B)
-        self.w_real_A = self.netW_A(self.real_A)
-        self.w_fake_A = self.netW_A(self.fake_A)
-        self.w_real_B = self.netW_B(self.real_B)
-        self.w_fake_B = self.netW_B(self.fake_B)
-        self.Sigmoid = nn.Sigmoid()
-        self.weights_A = 0.5*(self.Sigmoid(self.w_real_A) + self.Sigmoid(-self.w_fake_A))
-        self.weights_B = 0.5*(self.Sigmoid(-self.w_real_B) + self.Sigmoid(self.w_fake_B))
-        self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
-        self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
-        self.idt_A = self.netG_A(self.real_B)
-        self.idt_B = self.netG_B(self.real_A)
+        input_z = torch.normal(0, 1, size=(1,8))
+        self.fake_B = self.netG_A(self.real_A, input_z)  # G_xy(x) in the paper
+        input_z = torch.normal(0, 1, size=(1,8))
+        self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
+
+        if self.isTrain:
+            self.discriminated_A = self.netD(self.real_A, self.fake_B)
+            self.discriminated_B = self.netD(self.fake_A, self.real_B)
+            self.w_real_A = self.netW_A(self.real_A)
+            self.w_fake_A = self.netW_A(self.fake_A)
+            self.w_real_B = self.netW_B(self.real_B)
+            self.w_fake_B = self.netW_B(self.fake_B)
+            self.Sigmoid = nn.Sigmoid()
+            self.weights_A = 0.5*(self.Sigmoid(self.w_real_A) + self.Sigmoid(-self.w_fake_B))
+            self.weights_B = 0.5*(self.Sigmoid(-self.w_fake_A) + self.Sigmoid(self.w_real_B))
+        
+        input_z = torch.normal(0, 1, size=(1,8))
+        self.rec_A = self.netG_B(self.fake_B, input_z)   # G_B(G_A(A))
+        input_z = torch.normal(0, 1, size=(1,8))
+        self.rec_B = self.netG_A(self.fake_A, input_z)   # G_A(G_B(B))
+        input_z = torch.normal(0, 1, size=(1,8))
+        self.idt_A = self.netG_A(self.real_B, input_z)
+        input_z = torch.normal(0, 1, size=(1,8))
+        self.idt_B = self.netG_B(self.real_A, input_z)
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """
@@ -155,6 +164,7 @@ class BatchWeightModel(BaseModel):
         self.loss_W = self.criterionGAN.loss_W(self.L_minus, self.L_plus)
 
         #M calculate the gradients
+        self.set_requires_grad([self.netG_A, self.netG_B], True)  # Optimizing Gs now
         self.set_requires_grad([self.netD, self.netW_A, self.netW_B], False)  # D and Ws require no gradients when optimizing Gs
         self.loss_G.backward(retain_graph=True)       # calculate gradients of network G w.r.t. loss_G
 
@@ -173,7 +183,7 @@ class BatchWeightModel(BaseModel):
 
         #M calculate the gradients
         self.set_requires_grad([self.netD], True)  # Optimizing D now
-        self.set_requires_grad([self.netW_A, self.netW_B], False) 
+        self.set_requires_grad([self.netW_A, self.netW_B, self.netG_A, self.netG_B], False) 
         self.loss_D.backward()       # calculate gradients of network G w.r.t. loss_D
 
     def optimize_parameters(self):
@@ -191,6 +201,28 @@ class BatchWeightModel(BaseModel):
     # def optimize_parameters_D(self):
         """Update network weights for D; it will be called in every training iteration."""
         # self.forward()               # first call forward to calculate intermediate results
+        
+        self.optimizer_D.zero_grad()   # clear network D's existing gradients
+        
+        self.backward_D()              # calculate loss and gradients for network D
+        
+        self.optimizer_D.step()        # update gradients for network D
+
+    def optimize_parameters_GW(self):
+        """Update network weights for G and W; it will be called in every training iteration."""
+        self.forward()               # first call forward to calculate intermediate results
+        
+        self.optimizer_G.zero_grad()   # clear networks existing gradients
+        self.optimizer_W.zero_grad()
+        
+        self.backward_GW()              # calculate loss and gradients for network G and W
+        
+        self.optimizer_G.step()        # update gradients for network G
+        self.optimizer_W.step() 
+
+    def optimize_parameters_D(self):
+        """Update network weights for D; it will be called in every training iteration."""
+        self.forward()               # first call forward to calculate intermediate results
         
         self.optimizer_D.zero_grad()   # clear network D's existing gradients
         
