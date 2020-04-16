@@ -168,7 +168,7 @@ class BatchWeightModel(BaseModel):
         # calculate loss given the input and intermediate results
 
         #M calculate the loss
-        self.compute_Ls()        # calculate L- and L+
+        # self.compute_Ls()        # calculate L- and L+
         self.loss_D = self.criterionGAN.loss_D(self.L_minus, self.L_plus) # calculate loss
 
         #M calculate the gradients

@@ -717,7 +717,7 @@ class JointDiscriminator(nn.Module):
         self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
 
         self.ReLU = nn.LeakyReLU(0.2, True)
-        self.Sigmoid = nn.Tanh()
+        self.activation = nn.Tanh()
 
     def forward(self, input_x, input_y):
         """Standard forward."""
@@ -740,7 +740,7 @@ class JointDiscriminator(nn.Module):
         xy3 = torch.cat((x3, xy3, y3), dim = 1)
         xy3 = self.ReLU(self.c_xy4(xy3))
         xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024))) # TODO
-        xy3 = self.Sigmoid(self.fcl2(xy3))
+        xy3 = self.activation(self.fcl2(xy3))
 
         return xy3
 
