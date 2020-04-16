@@ -743,9 +743,11 @@ class JointDiscriminator(nn.Module):
         self.c_y1 = nn.Conv2d(output_nc, ndf, kernel_size=4, stride=2, padding=3)
         self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
         self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
+        # Output should be 2x2
+        # Every layer should half the spatial resolution
 
         self.ReLU = nn.LeakyReLU(0.2, True)
-        self.Sigmoid = nn.Tanh()
+        self.activation = nn.Tanh()
 
     def forward(self, input_x, input_y):
         """Standard forward."""
@@ -772,8 +774,9 @@ class JointDiscriminator(nn.Module):
         xy3 = torch.cat((x3, xy3, y3), dim = 1)
         #print(xy3.size())
         xy3 = self.ReLU(self.c_xy4(xy3))
-        xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024))) # TODO
-        xy3 = self.Sigmoid(self.fcl2(xy3))
+        xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024)))
+        # xy3 = self.activation(self.fcl2(xy3)) # TODO: check if activation works better
+        xy3 = self.fcl2(xy3)
 
         return xy3
 
@@ -929,6 +932,7 @@ class BatchWeightGenerator(nn.Module):
         self.ct_xz1 = nn.ConvTranspose2d(64, c, kernel_size=K, stride=s, padding=1)
 
         self.ReLU = nn.ReLU(True)
+        self.sigmoid = nn.Tanh()
 
     def forward(self, input_x, input_z):
         """Standard forward."""
@@ -951,8 +955,7 @@ class BatchWeightGenerator(nn.Module):
         xz = self.ReLU(xz)
         xz = self.resBlock(xz)
         xz = self.resBlock(xz)
-        xz = self.ct_xz1(xz)
-        xz = self.ReLU(xz)
+        xz = self.sigmoid(self.ct_xz1(xz))
         #print(xz.size())
         
         return xz

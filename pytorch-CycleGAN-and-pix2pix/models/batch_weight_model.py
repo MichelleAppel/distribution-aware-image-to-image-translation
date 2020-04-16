@@ -130,7 +130,7 @@ class BatchWeightModel(BaseModel):
         input_z = torch.normal(0, 1, size=self.z_size)
         self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
 
-        if self.isTrain:
+        if self.isTrain: # TODO: seperate G and D training
             self.discriminated_A = self.netD(self.real_A, self.fake_B)
             self.discriminated_B = self.netD(self.fake_A, self.real_B)
             self.w_real_A = self.netW_A(self.real_A)
@@ -154,8 +154,8 @@ class BatchWeightModel(BaseModel):
         """Computes L- and L+ of the paper """
         self.L_minus = self.criterionGAN.L_minus(self.discriminated_A, self.weights_A)
         self.L_plus = self.criterionGAN.L_plus(self.discriminated_B, self.weights_B)
-        self.loss_minus = self.L_minus
-        self.loss_plus = self.L_plus
+        self.loss_minus = self.L_minus # For visualization
+        self.loss_plus = self.L_plus   #   ""       ""
 
     def backward_GW(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
@@ -195,9 +195,9 @@ class BatchWeightModel(BaseModel):
 
     def optimize_parameters_GW(self):
         """Update network weights for G and W; it will be called in every training iteration."""
-        self.forward()               # first call forward to calculate intermediate results
-        
         self.optimizer_G.zero_grad()   # clear networks existing gradients
+        
+        self.forward()               # first call forward to calculate intermediate results
         # self.optimizer_W.zero_grad()
         
         self.backward_GW()              # calculate loss and gradients for network G and W
@@ -207,9 +207,9 @@ class BatchWeightModel(BaseModel):
 
     def optimize_parameters_D(self):
         """Update network weights for D; it will be called in every training iteration."""
-        self.forward()               # first call forward to calculate intermediate results
-        
         self.optimizer_D.zero_grad()   # clear network D's existing gradients
+        
+        self.forward()               # first call forward to calculate intermediate results
         
         self.backward_D()              # calculate loss and gradients for network D
         
