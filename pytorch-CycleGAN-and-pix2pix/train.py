@@ -24,7 +24,7 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
 
-if __name__ == '__main__':
+if __name__ == '__main_old__':
     opt = TrainOptions().parse()   # get training options
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
@@ -79,7 +79,17 @@ if __name__ == '__main__':
 
 
 # new training function (implements the pseudocode on the paper)
-if __name__ == '__main_new__':
+if __name__ == '__main__':
+
+    def inf_data(data_iter, data_loader):
+        try:
+            data=next(data_iter)
+        except StopIteration:
+            data_iter = iter(data_loader)
+            data = next(data_iter)
+
+        return data, data_iter
+
     opt = TrainOptions().parse()   # get training options
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
@@ -92,6 +102,11 @@ if __name__ == '__main_new__':
 
     n = 20000
     d = 5
+    learning_rate_update_freq = 1000
+    opt.display_freq = 20
+    opt.print_freq = 20
+    opt.save_latest_freq = 1000
+    opt.save_epoch_freq = 1000
 
     data_time = time.time() # timer for data loading 
     it_gen = iter(dataset) #iterator for outer cycle
@@ -104,7 +119,8 @@ if __name__ == '__main_new__':
         visualizer.reset()              # reset the visualizer: make sure it saves the results to HTML at least once every epoch
         disc_iters = 0                  # the number of discriminator iterations in current gen. iteration, reset to 0 every time
 
-        data = next(it_gen)
+        #data = next(it_gen)
+        data, it_gen = inf_data(it_gen, dataset)
         model.set_input(data)         # unpack data from dataset and apply preprocessing
         model.optimize_parameters_GW()   # calculate loss functions, get gradients, update network weights
         gen_iters += opt.batch_size
@@ -112,33 +128,38 @@ if __name__ == '__main_new__':
         for j in range(d):  # inner loop within one generator step
             j_start_time = time.time()  # timer for computation per discriminator step
 
-            data = next(it_dis)
+            #data = next(it_dis)
+            data, it_dis = inf_data(it_dis, dataset)
             model.set_input(data)         # unpack data from dataset and apply preprocessing
             model.optimize_parameters_D()   # calculate loss functions, get gradients, update network weights
             disc_iters += opt.batch_size
 
-            if gen_iters % opt.display_freq == 0:   # display images on visdom and save images to a HTML file
-                save_result = gen_iters % opt.update_html_freq == 0
-                model.compute_visuals()
-                visualizer.display_current_results(model.get_current_visuals(), k, save_result)
+            if j==0:
+                if gen_iters % opt.display_freq == 0:   # display images on visdom and save images to a HTML file
+                    save_result = gen_iters % opt.update_html_freq == 0
+                    model.compute_visuals()
+                    visualizer.display_current_results(model.get_current_visuals(), k, save_result)
 
-            if gen_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
-                losses = model.get_current_losses()
-                t_comp = (time.time() - j_start_time) / opt.batch_size
-                visualizer.print_current_losses(k, disc_iters, losses, t_comp, t_data)
-                if opt.display_id > 0:
-                    visualizer.plot_current_losses(k, float(disc_iters) / dataset_size, losses)
+                if gen_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
+                    losses = model.get_current_losses()
+                    t_comp = (time.time() - j_start_time) / opt.batch_size
+                    visualizer.print_current_losses(k, disc_iters, losses, t_comp, t_data)
+                    if opt.display_id > 0:
+                        visualizer.plot_current_losses(k, float(disc_iters) / dataset_size, losses)
 
-            if gen_iters % opt.save_latest_freq == 0:   # cache our latest model every <save_latest_freq> iterations
-                print('saving the latest model (epoch %d, total_iters %d)' % (k, gen_iters))
-                save_suffix = 'iter_%d' % gen_iters if opt.save_by_iter else 'latest'
-                model.save_networks(save_suffix)
+                if gen_iters % opt.save_latest_freq == 0:   # cache our latest model every <save_latest_freq> iterations
+                    print('saving the latest model (G iteration %d, total_iters %d)' % (k, gen_iters))
+                    save_suffix = 'iter_%d' % gen_iters if opt.save_by_iter else 'latest'
+                    model.save_networks(save_suffix)
 
             iter_data_time = time.time()
         if k % opt.save_epoch_freq == 0:              # cache our model every <save_epoch_freq> epochs
-            print('saving the model at the end of epoch %d, iters %d' % (k, gen_iters))
+            print('saving the model at the end of G iteration %d, iters %d' % (k, gen_iters))
             model.save_networks('latest')
             model.save_networks(k)
 
-        print('End of epoch %d / %d \t Time Taken: %d sec' % (k, opt.n_epochs + opt.n_epochs_decay, time.time() - k_start_time))
-        model.update_learning_rate()                     # update learning rates at the end of every epoch.
+        print('End of G iteration %d / %d \t Time Taken: %d sec' % (k, opt.n_epochs + opt.n_epochs_decay, time.time() - k_start_time))
+        if gen_iters % learning_rate_update_freq == 0:
+            model.update_learning_rate()                     # update learning rates at the end of every epoch.
+
+
