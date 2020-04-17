@@ -154,6 +154,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'batch_weight':
+        net = BatchWeightGenerator()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -212,34 +214,6 @@ def define_W(gpu_ids=[], ngf=64):
     The weight network is a DC-GAN generator
     """
     net = DCGANDiscriminator(len(gpu_ids))
-
-    return init_net(net, gpu_ids=gpu_ids)
-
-def define_BatchWeight_G(gpu_ids=[]):
-    """Create a generator
-
-    Parameters:
-        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
-
-    Returns a weight network
-
-    The generator network is defined in the paper
-    """
-    net = BatchWeightGenerator()
-
-    return init_net(net, gpu_ids=gpu_ids)
-
-def define_BatchWeight_D(gpu_ids=[]):
-    """Create a discriminator
-
-    Parameters:
-        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
-
-    Returns a weight network
-
-    The discriminator network is defined in the paper
-    """
-    net = JointDiscriminator()
 
     return init_net(net, gpu_ids=gpu_ids)
 
@@ -775,8 +749,8 @@ class JointDiscriminator(nn.Module):
         #print(xy3.size())
         xy3 = self.ReLU(self.c_xy4(xy3))
         xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024)))
-        # xy3 = self.activation(self.fcl2(xy3)) # TODO: check if activation works better
-        xy3 = self.fcl2(xy3)
+        xy3 = self.activation(self.fcl2(xy3)) # TODO: check if activation works better
+        # xy3 = self.fcl2(xy3)
 
         return xy3
 
@@ -809,7 +783,7 @@ class JointDiscriminator_old(nn.Module):
         self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
 
         self.ReLU = nn.LeakyReLU(0.2, True)
-        self.activation = nn.Tanh()
+        self.activation = nn.Sigmoid()
 
     def forward(self, input_x, input_y):
         """Standard forward."""
@@ -829,12 +803,13 @@ class JointDiscriminator_old(nn.Module):
         xy2 = self.resBlock(xy2)
         xy2 = self.resBlock(xy2)
         xy3 = self.ReLU(self.c_xy3(xy2))
-        xy3 = torch.cat((x3, xy3, y3), dim = 1)
-        xy3 = self.ReLU(self.c_xy4(xy3))
-        xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024))) # TODO
-        xy3 = self.activation(self.fcl2(xy3))
+        xy4 = torch.cat((x3, xy3, y3), dim = 1)
+        xy4 = self.ReLU(self.c_xy4(xy4))
+        xy4 = self.ReLU(self.fcl1(xy4.view(-1, 1024))) # TODO
+        # xy3 = self.activation(self.fcl2(xy3))
+        xy4 = self.fcl2(xy4)
 
-        return xy3
+        return xy4
 
 class DCGANDiscriminator(nn.Module):
     """DCGAN Generator Code. Used as weight network in the paper"""
@@ -932,9 +907,9 @@ class BatchWeightGenerator(nn.Module):
         self.ct_xz1 = nn.ConvTranspose2d(64, c, kernel_size=K, stride=s, padding=1)
 
         self.ReLU = nn.ReLU(True)
-        self.sigmoid = nn.Tanh()
+        self.activation = nn.Tanh()
 
-    def forward(self, input_x, input_z):
+    def forward(self, input_x):
         """Standard forward."""
 
         x1 = self.c_x1(input_x)
@@ -944,18 +919,14 @@ class BatchWeightGenerator(nn.Module):
         x1 = self.c_x2(x1)
         x1 = self.ReLU(x1)
 
+        input_z = torch.normal(0, 1, size=(input_x.shape[0], self.d, 1, 1)).cuda() # The noise vector
         z1 = input_z.repeat((1, 1, int(32/self.s), int(32/self.s)))
 
-        #print(input_x.size())
-        #print(input_z.size())
-        #print(x1.size())
-        #print(z1.size())
         xz = torch.cat((x1, z1), dim = 1) #M? not sure how to concatenate
         xz = self.c_xz1(xz)
         xz = self.ReLU(xz)
         xz = self.resBlock(xz)
         xz = self.resBlock(xz)
-        xz = self.sigmoid(self.ct_xz1(xz))
-        #print(xz.size())
+        xz = self.activation(self.ct_xz1(xz))
         
         return xz

@@ -18,8 +18,9 @@ You need to implement the following functions:
 import torch
 from .base_model import BaseModel
 from . import networks
-#M
+
 import torch.nn as nn
+import torch.nn.functional as F
 from util.image_pool import ImagePool
 import itertools
 
@@ -38,10 +39,13 @@ class BatchWeightModel(BaseModel):
             the modified parser.
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
-        parser.set_defaults(dataset_mode='unaligned')  # You can rewrite default values for this model. For example, this model usually uses aligned dataset as its dataset.
-        # if is_train:
-        #     parser.add_argument('--lambda_regression', type=float, default=1.0, help='weight for the regression loss')  # You can define new arguments for this model.
+        parser.set_defaults(dataset_mode='unaligned') # Unaligned for cycleGAN
+        
+        # The network architectures of D and G
+        
+        parser.set_defaults(netG='batch_weight')
         parser.set_defaults(netD='joint')
+
         return parser
 
     def __init__(self, opt):
@@ -59,7 +63,6 @@ class BatchWeightModel(BaseModel):
         self.loss_names = ['G', 'W', 'D', 'minus', 'plus']
         
         # specify the images you want to save and display. The program will call base_model.get_current_visuals to save and display these images.
-        #M taken from cycleGAN
         visual_names_A = ['real_A', 'fake_B', 'rec_A', 'idt_A']
         visual_names_B = ['real_B', 'fake_A', 'rec_B', 'idt_B']
         self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
@@ -73,29 +76,23 @@ class BatchWeightModel(BaseModel):
         else:  # during test time, only load Gs
             self.model_names = ['G_A', 'G_B'] # No W's during test time
         
-        # define networks; you can use opt.isTrain to specify different behaviors for training and test.
-        #M taken from cycleGAN
+        # define networks
+        # generators
+        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        
+        if self.isTrain:
+            # discriminator
+            self.netD = networks.define_D(opt.input_nc, opt.ndf, opt.netD, opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids, opt.output_nc)
 
-        #M? check D and Gs architectures
-        # generators: taken from cyclegan
-        self.netG_A = networks.define_BatchWeight_G(self.gpu_ids)
-                    #networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        self.netG_B = networks.define_BatchWeight_G(self.gpu_ids)
-                    #networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        if self.isTrain:  # define discriminator
-            self.netD = networks.define_BatchWeight_D(self.gpu_ids)
-                    #define_D(opt.input_nc, opt.ndf, opt.netD, opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids, opt.output_nc)
-
-            # A: weight network: only used in training mode
+            # weight networks
             self.netW_A = networks.define_W(gpu_ids=self.gpu_ids, ngf=opt.ngf)
             self.netW_B = networks.define_W(gpu_ids=self.gpu_ids, ngf=opt.ngf)
 
-        #M? check losses
         if self.isTrain: # only defined during training time
-            # if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
-            #     assert(opt.input_nc == opt.output_nc)
             self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
             self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
+
             # define loss
             self.criterionGAN = networks.weighted_GANLoss().to(self.device)  # define GAN loss.
             # define and initialize optimizers. You can define one optimizer for each network.
@@ -104,6 +101,7 @@ class BatchWeightModel(BaseModel):
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_W = torch.optim.Adam(itertools.chain(self.netW_A.parameters(), self.netW_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
             self.optimizers.append(self.optimizer_W)
@@ -124,31 +122,27 @@ class BatchWeightModel(BaseModel):
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
-        self.z_size = (self.batch_size, 8, 1, 1)
-        input_z = torch.normal(0, 1, size=self.z_size)
-        self.fake_B = self.netG_A(self.real_A, input_z)  # G_xy(x) in the paper
-        input_z = torch.normal(0, 1, size=self.z_size)
-        self.fake_A = self.netG_B(self.real_B, input_z)  # G_yx(y) in the paper
+            
+        self.fake_B = self.netG_A(self.real_A)  # G_xy(x) in the paper
+        self.fake_A = self.netG_B(self.real_B)  # G_yx(y) in the paper
 
         if self.isTrain: # TODO: seperate G and D training
-            self.discriminated_A = self.netD(self.real_A, self.fake_B)
-            self.discriminated_B = self.netD(self.fake_A, self.real_B)
-            self.w_real_A = self.netW_A(self.real_A)
-            self.w_fake_A = self.netW_A(self.fake_A)
-            self.w_real_B = self.netW_B(self.real_B)
-            self.w_fake_B = self.netW_B(self.fake_B)
-            self.Sigmoid = nn.Sigmoid()
-            self.weights_A = 1#0.5*(self.Sigmoid(self.w_real_A) + self.Sigmoid(-self.w_fake_B))
-            self.weights_B = 1#0.5*(self.Sigmoid(-self.w_fake_A) + self.Sigmoid(self.w_real_B))
+            self.discriminated_A = self.netD(self.real_A, self.fake_B) # D(x, G_xy(x))
+            self.discriminated_B = self.netD(self.fake_A, self.real_B) # D(G_yx(y), y)
+
+            self.w_real_A = self.netW_A(self.real_A) # W_x(x)
+            self.w_fake_A = self.netW_A(self.fake_A) # W_x(G_yx(y))
+            self.w_real_B = self.netW_B(self.real_B) # W_y(y)
+            self.w_fake_B = self.netW_B(self.fake_B) # W_y(G_xy(x))
+   
+            self.weights_A = 1#0.5*(F.Sigmoid(self.w_real_A) + F.Sigmoid(-self.w_fake_B))
+            self.weights_B = 1#0.5*(F.Sigmoid(-self.w_fake_A) + F.Sigmoid(self.w_real_B))
         
-        input_z = torch.normal(0, 1, size=self.z_size)
-        self.rec_A = self.netG_B(self.fake_B, input_z)   # G_B(G_A(A))
-        input_z = torch.normal(0, 1, size=self.z_size)
-        self.rec_B = self.netG_A(self.fake_A, input_z)   # G_A(G_B(B))
-        input_z = torch.normal(0, 1, size=self.z_size)
-        self.idt_A = self.netG_A(self.real_B, input_z)
-        input_z = torch.normal(0, 1, size=self.z_size)
-        self.idt_B = self.netG_B(self.real_A, input_z)
+        self.rec_A = self.netG_B(self.fake_B) # G_B(G_A(A))
+        self.rec_B = self.netG_A(self.fake_A) # G_A(G_B(B))
+        
+        self.idt_A = self.netG_B(self.real_A) # G_yx(x)
+        self.idt_B = self.netG_A(self.real_B) # G_xy(y)
 
     def compute_Ls(self):
         """Computes L- and L+ of the paper """
@@ -191,7 +185,8 @@ class BatchWeightModel(BaseModel):
         self.loss_D.backward()       # calculate gradients of network G w.r.t. loss_D
 
     def optimize_parameters(self):
-        pass
+        self.optimize_parameters_GW()
+        self.optimize_parameters_D()
 
     def optimize_parameters_GW(self):
         """Update network weights for G and W; it will be called in every training iteration."""
