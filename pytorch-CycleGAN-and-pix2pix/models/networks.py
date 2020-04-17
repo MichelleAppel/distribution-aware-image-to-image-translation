@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import init
+from torch.nn.utils import spectral_norm
 import functools
 from torch.optim import lr_scheduler
 
@@ -377,7 +378,7 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
         else:
             raise NotImplementedError('{} not implemented'.format(type))
         interpolatesv.requires_grad_(True)
-        disc_interpolates = netD(interpolatesv)
+        disc_interpolates = netD(interpolatesv, interpolatesv)
         gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
                                         grad_outputs=torch.ones(disc_interpolates.size()).to(device),
                                         create_graph=True, retain_graph=True, only_inputs=True)
@@ -508,6 +509,64 @@ class ResnetBlock(nn.Module):
         out = x + self.conv_block(x)  # add skip connections
         return out
 
+class ResnetBlock_spectralnorm(nn.Module):
+    """Define a Resnet block"""
+
+    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias):
+        """Initialize the Resnet block
+
+        A resnet block is a conv block with skip connections
+        We construct a conv block with build_conv_block function,
+        and implement skip connections in <forward> function.
+        Original Resnet paper: https://arxiv.org/pdf/1512.03385.pdf
+        """
+        super(ResnetBlock_spectralnorm, self).__init__()
+        self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, use_dropout, use_bias)
+
+    def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias):
+        """Construct a convolutional block.
+
+        Parameters:
+            dim (int)           -- the number of channels in the conv layer.
+            padding_type (str)  -- the name of padding layer: reflect | replicate | zero
+            norm_layer          -- normalization layer
+            use_dropout (bool)  -- if use dropout layers.
+            use_bias (bool)     -- if the conv layer uses bias or not
+
+        Returns a conv block (with a conv layer, a normalization layer, and a non-linearity layer (ReLU))
+        """
+        conv_block = []
+        p = 0
+        if padding_type == 'reflect':
+            conv_block += [nn.ReflectionPad2d(1)]
+        elif padding_type == 'replicate':
+            conv_block += [nn.ReplicationPad2d(1)]
+        elif padding_type == 'zero':
+            p = 1
+        else:
+            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+
+        conv_block += [spectral_norm(nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias)), norm_layer(dim), nn.ReLU(True)]
+        if use_dropout:
+            conv_block += [nn.Dropout(0.5)]
+
+        p = 0
+        if padding_type == 'reflect':
+            conv_block += [nn.ReflectionPad2d(1)]
+        elif padding_type == 'replicate':
+            conv_block += [nn.ReplicationPad2d(1)]
+        elif padding_type == 'zero':
+            p = 1
+        else:
+            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+        conv_block += [spectral_norm(nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias)), norm_layer(dim)]
+
+        return nn.Sequential(*conv_block)
+
+    def forward(self, x):
+        """Forward function (with skip connections)"""
+        out = x + self.conv_block(x)  # add skip connections
+        return out
 
 class UnetGenerator(nn.Module):
     """Create a Unet-based generator"""
@@ -690,126 +749,6 @@ class PixelDiscriminator(nn.Module):
         """Standard forward."""
         return self.net(input)
 
-class JointDiscriminator(nn.Module):
-    """Defines a joint discriminator"""
-
-    def __init__(self, input_nc=3, output_nc=3, ndf=32):
-        """Construct a joint discriminator
-        Parameters:
-            input_nc (int)  -- the number of channels in input images
-            ndf (int)       -- the number of filters in the last conv layer
-        """
-        super(JointDiscriminator, self).__init__()
-        ndf = 32
-
-        self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=4, stride=2, padding=3)
-        self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
-        self.c_x3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
-
-        self.c_xy1 = nn.Conv2d(output_nc+input_nc, ndf*2, kernel_size=4, stride=2, padding=3)
-        self.c_xy2 = nn.Conv2d(ndf * 4, 128, kernel_size=4, stride=2, padding=0)
-        self.resBlock = ResnetBlock(256, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
-        self.c_xy3 = nn.Conv2d(ndf * 8, ndf * 8, kernel_size=4, stride=2, padding=1)
-        self.c_xy4 = nn.Conv2d(ndf * 16, ndf * 32, kernel_size=4, stride=2, padding=0) # TODO
-        self.fcl1 = nn.Linear(1024, 256)
-        self.fcl2 = nn.Linear(256, 1)
-
-        self.c_y1 = nn.Conv2d(output_nc, ndf, kernel_size=4, stride=2, padding=3)
-        self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0)
-        self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
-        # Output should be 2x2
-        # Every layer should half the spatial resolution
-
-        self.ReLU = nn.LeakyReLU(0.2, True)
-        self.activation = nn.Tanh()
-
-    def forward(self, input_x, input_y):
-        """Standard forward."""
-        x1 = self.ReLU(self.c_x1(input_x))
-        x2 = self.ReLU(self.c_x2(x1))
-        x3 = self.ReLU(self.c_x3(x2))
-
-        y1 = self.ReLU(self.c_y1(input_y))
-        y2 = self.ReLU(self.c_y2(y1))
-        y3 = self.ReLU(self.c_y3(y2))
-
-        #print(input_x.size())
-        #print(input_y.size())
-        xy = torch.cat((input_x, input_y), dim = 1) #M? not sure how to concatenate
-        xy1 = self.ReLU(self.c_xy1(xy))
-        xy1 = torch.cat((x1, xy1, y1), dim = 1) # 128
-        xy2 = self.ReLU(self.c_xy2(xy1))
-        xy2 = torch.cat((x2, xy2, y2), dim = 1) # 256
-        #print(xy2.size())
-        xy2 = self.resBlock(xy2)
-        xy2 = self.resBlock(xy2)
-        #print(xy2.size())
-        xy3 = self.ReLU(self.c_xy3(xy2))
-        xy3 = torch.cat((x3, xy3, y3), dim = 1)
-        #print(xy3.size())
-        xy3 = self.ReLU(self.c_xy4(xy3))
-        xy3 = self.ReLU(self.fcl1(xy3.view(-1, 1024)))
-        xy3 = self.activation(self.fcl2(xy3)) # TODO: check if activation works better
-        # xy3 = self.fcl2(xy3)
-
-        return xy3
-
-class JointDiscriminator_old(nn.Module):
-    """Defines a joint discriminator"""
-
-    def __init__(self, input_nc=3, output_nc=3, ndf=32):
-        """Construct a joint discriminator
-        Parameters:
-            input_nc (int)  -- the number of channels in input images
-            ndf (int)       -- the number of filters in the last conv layer
-        """
-        super(JointDiscriminator, self).__init__()
-        ndf = 32
-
-        self.c_x1 = nn.Conv2d(input_nc, ndf, kernel_size=5, stride=2, padding=0)
-        self.c_x2 = nn.Conv2d(ndf, ndf * 2, kernel_size=5, stride=2, padding=0)
-        self.c_x3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
-
-        self.c_xy1 = nn.Conv2d(output_nc+input_nc, ndf*2, kernel_size=5, stride=2, padding=0)
-        self.c_xy2 = nn.Conv2d(ndf * 4, 128, kernel_size=5, stride=2, padding=0)
-        self.resBlock = ResnetBlock(256, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
-        self.c_xy3 = nn.Conv2d(ndf * 8, ndf * 8, kernel_size=5, stride=2, padding=0)
-        self.c_xy4 = nn.Conv2d(ndf * 16, ndf * 32, kernel_size=5, stride=2, padding=0) # TODO
-        self.fcl1 = nn.Linear(1024, 256)
-        self.fcl2 = nn.Linear(256, 1)
-
-        self.c_y1 = nn.Conv2d(output_nc, ndf, kernel_size=5, stride=2, padding=0)
-        self.c_y2 = nn.Conv2d(ndf, ndf * 2, kernel_size=5, stride=2, padding=0)
-        self.c_y3 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=5, stride=2, padding=0)
-
-        self.ReLU = nn.LeakyReLU(0.2, True)
-        self.activation = nn.Sigmoid()
-
-    def forward(self, input_x, input_y):
-        """Standard forward."""
-        x1 = self.ReLU(self.c_x1(input_x))
-        x2 = self.ReLU(self.c_x2(x1))
-        x3 = self.ReLU(self.c_x3(x2))
-
-        y1 = self.ReLU(self.c_y1(input_y))
-        y2 = self.ReLU(self.c_y2(y1))
-        y3 = self.ReLU(self.c_y3(y2))
-
-        xy = torch.cat((input_x, input_y), dim = 1) #M? not sure how to concatenate
-        xy1 = self.ReLU(self.c_xy1(xy))
-        xy1 = torch.cat((x1, xy1, y1), dim = 1) # 128
-        xy2 = self.ReLU(self.c_xy2(xy1))
-        xy2 = torch.cat((x2, xy2, y2), dim = 1) # 256
-        xy2 = self.resBlock(xy2)
-        xy2 = self.resBlock(xy2)
-        xy3 = self.ReLU(self.c_xy3(xy2))
-        xy4 = torch.cat((x3, xy3, y3), dim = 1)
-        xy4 = self.ReLU(self.c_xy4(xy4))
-        xy4 = self.ReLU(self.fcl1(xy4.view(-1, 1024))) # TODO
-        # xy3 = self.activation(self.fcl2(xy3))
-        xy4 = self.fcl2(xy4)
-
-        return xy4
 
 class DCGANDiscriminator(nn.Module):
     """DCGAN Generator Code. Used as weight network in the paper"""
@@ -819,59 +758,23 @@ class DCGANDiscriminator(nn.Module):
         self.ngpu = ngpu
         self.main = nn.Sequential(
             # input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            spectral_norm(nn.Conv2d(nc, ndf, 4, 2, 1, bias=False)),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            spectral_norm(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
             nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*2) x 16 x 16
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            spectral_norm(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*4) x 8 x 8
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 0, bias=False),
+            spectral_norm(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 0, bias=False)),
             #nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
+            # nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
             # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            # nn.Sigmoid()
-        )
-
-    def forward(self, input):
-        if input.is_cuda and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
-        else:
-            output = self.main(input)
-            #print(output.size())
-
-        return output.view(-1, 1).squeeze(1)
-
-class DCGANDiscriminator_original(nn.Module):
-    """DCGAN Generator Code. Used as weight network in the paper"""
-
-    def __init__(self, ngpu, nc=3, ndf=64):
-        super(DCGANDiscriminator, self).__init__()
-        self.ngpu = ngpu
-        self.main = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf) x 32 x 32
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*2) x 16 x 16
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*4) x 8 x 8
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            # nn.Sigmoid()
+            nn.Tanh()
         )
 
     def forward(self, input):
@@ -881,13 +784,12 @@ class DCGANDiscriminator_original(nn.Module):
             output = self.main(input)
 
         return output.view(-1, 1).squeeze(1)
-
         
 
 class BatchWeightGenerator(nn.Module):
     """Defines a generator from the paper"""
 
-    def __init__(self, input_nc=3, ndf=32, s=2, K=4, c=3):
+    def __init__(self, input_nc=3, ndf=32, s=2, K=4, c=3, _spectral_norm=True):
         """Construct a joint discriminator
 
         Parameters:
@@ -898,16 +800,28 @@ class BatchWeightGenerator(nn.Module):
         
         self.s = s
         self.d = 8
+        self._spectral_norm = _spectral_norm
 
-        self.c_x1 = nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=1)
-        self.resBlock = ResnetBlock(64, 'zero', nn.BatchNorm2d, False, False)  #M? not sure about the ResBlock
-        self.c_x2 = nn.Conv2d(ndf * 2, ndf * 2, kernel_size=1, stride=1, padding=0)
+        self.c_x1 = self.norm(nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=1))
 
-        self.c_xz1 = nn.Conv2d(ndf * 2 + self.d , ndf*2, kernel_size=1, stride=1, padding=0) # + int(32/s)
-        self.ct_xz1 = nn.ConvTranspose2d(64, c, kernel_size=K, stride=s, padding=1)
+        if self._spectral_norm:
+            self.resBlock = ResnetBlock_spectralnorm(64, 'zero', nn.BatchNorm2d, False, False)
+        else:
+            self.resBlock = ResnetBlock(64, 'zero', nn.BatchNorm2d, False, False)
+
+        self.c_x2 = self.norm(nn.Conv2d(ndf * 2, ndf * 2, kernel_size=1, stride=1, padding=0))
+
+        self.c_xz1 = self.norm(nn.Conv2d(ndf * 2 + self.d , ndf*2, kernel_size=1, stride=1, padding=0))
+        self.ct_xz1 = self.norm(nn.ConvTranspose2d(64, c, kernel_size=K, stride=s, padding=1))
 
         self.ReLU = nn.ReLU(True)
         self.activation = nn.Tanh()
+
+    def norm(self, layer):
+        if self._spectral_norm:
+            return spectral_norm(layer)
+        else:
+            return layer
 
     def forward(self, input_x):
         """Standard forward."""
@@ -930,3 +844,76 @@ class BatchWeightGenerator(nn.Module):
         xz = self.activation(self.ct_xz1(xz))
         
         return xz
+
+class JointDiscriminator(nn.Module):
+    """Defines a joint discriminator"""
+
+    def __init__(self, input_nc=3, output_nc=3, ndf=32, _spectral_norm=True):
+        """Construct a joint discriminator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+        """
+        super(JointDiscriminator, self).__init__()
+        ndf = 32
+        self._spectral_norm = _spectral_norm
+
+        self.c_x1 = self.norm(nn.Conv2d(input_nc, ndf, kernel_size=4, stride=2, padding=3))
+        self.c_x2 = self.norm(nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0))
+        self.c_x3 = self.norm(nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1))
+
+        self.c_xy1 = self.norm(nn.Conv2d(output_nc+input_nc, ndf*2, kernel_size=4, stride=2, padding=3))
+        self.c_xy2 = self.norm(nn.Conv2d(ndf * 4, 128, kernel_size=4, stride=2, padding=0))
+
+        if self._spectral_norm:
+            self.resBlock = ResnetBlock_spectralnorm(256, 'zero', nn.BatchNorm2d, False, False)
+        else:
+            self.resBlock = ResnetBlock(256, 'zero', nn.BatchNorm2d, False, False)
+
+        self.c_xy3 = self.norm(nn.Conv2d(ndf * 8, ndf * 8, kernel_size=4, stride=2, padding=1))
+        self.c_xy4 = self.norm(nn.Conv2d(ndf * 16, ndf * 32, kernel_size=4, stride=2, padding=0)) # TODO
+        self.fcl1 = self.norm(nn.Linear(1024, 256))
+        self.fcl2 = self.norm(nn.Linear(256, 1))
+
+        self.c_y1 = self.norm(nn.Conv2d(output_nc, ndf, kernel_size=4, stride=2, padding=3))
+        self.c_y2 = self.norm(nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=0))
+        self.c_y3 = self.norm(nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1))
+        # Output should be 2x2
+        # Every layer should half the spatial resolution
+
+        self.ReLU = nn.LeakyReLU(0.2, True)
+        self.activation = nn.Tanh()
+
+    def norm(self, layer):
+        if self._spectral_norm:
+            return spectral_norm(layer)
+        else:
+            return layer
+
+    def forward(self, input_x, input_y):
+        """Standard forward."""
+        x1 = self.ReLU(self.c_x1(input_x))
+        x2 = self.ReLU(self.c_x2(x1))
+        x3 = self.ReLU(self.c_x3(x2))
+
+        y1 = self.ReLU(self.c_y1(input_y))
+        y2 = self.ReLU(self.c_y2(y1))
+        y3 = self.ReLU(self.c_y3(y2))
+
+        xy = torch.cat((input_x, input_y), dim = 1) #M? not sure how to concatenate
+        xy1 = self.ReLU(self.c_xy1(xy))
+        xy1 = torch.cat((x1, xy1, y1), dim = 1) # 128
+        xy2 = self.ReLU(self.c_xy2(xy1))
+        xy2 = torch.cat((x2, xy2, y2), dim = 1) # 256
+
+        xy2 = self.resBlock(xy2)
+        xy2 = self.resBlock(xy2)
+
+        xy3 = self.ReLU(self.c_xy3(xy2))
+        xy4 = torch.cat((x3, xy3, y3), dim = 1)
+ 
+        xy4 = self.ReLU(self.c_xy4(xy4))
+        xy4 = self.ReLU(self.fcl1(xy4.view(-1, 1024)))
+        xy4 = self.fcl2(xy4)
+
+        return xy4
