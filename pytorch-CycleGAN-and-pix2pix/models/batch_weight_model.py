@@ -151,16 +151,28 @@ class BatchWeightModel(BaseModel):
         self.loss_G = self.criterionGAN.loss_G(self.L_minus, self.L_plus)
         self.loss_G.backward()
     
-    def backward_W(self):
+    def backward_W(self, use_gradient_penalty=False):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         self.compute_Ls()
         self.loss_W = self.criterionGAN.loss_W(self.L_minus, self.L_plus)**0.5 # Added sqrt to make loss proportionate to other losses
+
+        # train with gradient penalty
+        if use_gradient_penalty == True:
+            gradient_penalty = self.calc_gradient_penalty()
+            self.loss_W += gradient_penalty
+
         self.loss_W.backward()
 
-    def backward_D(self):
+    def backward_D(self, use_gradient_penalty = False):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         self.compute_Ls()
         self.loss_D = self.criterionGAN.loss_D(self.L_minus, self.L_plus)
+
+        # train with gradient penalty
+        if use_gradient_penalty == True:
+            gradient_penalty = self.calc_gradient_penalty()
+            self.loss_D += gradient_penalty
+
         self.loss_D.backward()
 
     def optimize_parameters(self):
@@ -180,3 +192,47 @@ class BatchWeightModel(BaseModel):
         self.forward()                 # call forward to calculate intermediate results
         self.backward_D()              # calculate loss and gradients for network D
         self.optimizer_D.step()        # update gradients for network D
+
+    def optimize_parameters_GW(self):
+        """Update network weights for G and W; it will be called in every training iteration."""
+        
+        self.optimizer_G.zero_grad()   # clear networks existing gradients
+        self.forward()                 # call forward to calculate intermediate results
+        self.backward_G()              # calculate loss and gradients for network G
+        self.optimizer_G.step()        # update gradients for network G
+
+        self.optimizer_W.zero_grad()   # clear networks existing gradients
+        self.forward()                 # call forward to calculate intermediate results
+        self.backward_W(use_gradient_penalty=True)              # calculate loss and gradients for network  W        
+        self.optimizer_W.step()        # update gradients for network W
+        
+    def optimize_parameters_D(self):
+        self.optimizer_D.zero_grad()   # clear networks existing gradients
+        self.forward()                 # call forward to calculate intermediate results
+        self.backward_D(use_gradient_penalty=True)              # calculate loss and gradients for network D
+        self.optimizer_D.step()        # update gradients for network D
+
+
+    def calc_gradient_penalty(self):
+        m = nn.Sigmoid()
+        D_A = self.discriminated_A
+        D_B = self.discriminated_B
+        self.real_A.requires_grad_(True)
+        gradients_A = torch.autograd.grad(outputs = m(self.netD(self.real_A, self.fake_B)), inputs=self.real_A,
+                                        grad_outputs=torch.ones(D_A.size()).cuda(),
+                                        create_graph=True, retain_graph=True, only_inputs=True)
+        self.real_A.requires_grad_(False)
+
+        self.real_B.requires_grad_(True)
+        gradients_B = torch.autograd.grad(outputs=m(self.netD(self.fake_A, self.real_B)), inputs=self.real_B,
+                                        grad_outputs=torch.ones(D_A.size()).cuda(),
+                                        create_graph=True, retain_graph=True, only_inputs=True)
+        self.real_B.requires_grad_(False)
+
+        gradients_A = gradients_A[0]  # flat the data
+        gradients_B = gradients_B[0] # flat the data
+
+        res = ((1-D_A.repeat(32, 1, 32).permute(1, 0, 2)) ** 2) * (gradients_A.norm(2, dim=1) ** 2) + (D_B.repeat(32, 1, 32).permute(1, 0, 2)** 2) * (gradients_B.norm(2, dim=1) ** 2)
+        res = res.mean() * 0.1
+
+        return res
