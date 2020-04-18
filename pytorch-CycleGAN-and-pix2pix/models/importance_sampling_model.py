@@ -24,7 +24,7 @@ from util.image_pool import ImagePool
 import itertools
 
 
-class BatchWeightModel(BaseModel):
+class ImportanceSamplingModel(BaseModel):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         """Add new model-specific options and rewrite default values for existing options.
@@ -37,12 +37,13 @@ class BatchWeightModel(BaseModel):
             the modified parser.
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
-        parser.set_defaults(dataset_mode='unaligned') # Unaligned for cycleGAN
+        parser.set_defaults(dataset_mode='importance_sampling') # Unaligned for cycleGAN
         
         # The network architectures of D and G
         
         parser.set_defaults(netG='batch_weight')
         parser.set_defaults(netD='joint')
+        parser.set_defaults(num_threads=0)
 
         return parser
 
@@ -88,7 +89,7 @@ class BatchWeightModel(BaseModel):
             self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
 
             # define loss
-            self.criterionGAN = networks.weighted_GANLoss().to(self.device)
+            self.criterionGAN = networks.importance_sampling_GANLoss().to(self.device)
 
             # define and initialize optimizers. 
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -111,7 +112,6 @@ class BatchWeightModel(BaseModel):
         self.real_A = input['A' if AtoB else 'B'].to(self.device)  # get image data A
         self.real_B = input['B' if AtoB else 'A'].to(self.device)  # get image data B
         self.image_paths = input['A_paths' if AtoB else 'B_paths']  # get image paths
-        self.batch_size = self.real_A.shape[0]
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
@@ -154,7 +154,7 @@ class BatchWeightModel(BaseModel):
     def backward_W(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         self.compute_Ls()
-        self.loss_W = self.criterionGAN.loss_W(self.L_minus, self.L_plus) 
+        self.loss_W = self.criterionGAN.loss_W(self.L_minus, self.L_plus)
         self.loss_W.backward()
 
     def backward_D(self):

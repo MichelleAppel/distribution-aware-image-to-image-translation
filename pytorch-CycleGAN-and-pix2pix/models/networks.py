@@ -296,53 +296,24 @@ class weighted_GANLoss(nn.Module):
     that has the same size as the input.
     """
 
-    def __init__(self, target_real_label=1.0, target_fake_label=0.0):
+    def __init__(self):
         """ Initialize the GANLoss class.
         Parameters:
             gan_mode (str) - - the type of GAN objective. It currently supports vanilla, lsgan, and wgangp.
-            target_real_label (bool) - - label for a real image
-            target_fake_label (bool) - - label of a fake image
         Note: Do not use sigmoid as the last layer of Discriminator.
         LSGAN needs no sigmoid. vanilla GANs will handle it with BCEWithLogitsLoss.
         """
         super(weighted_GANLoss, self).__init__()
-        self.register_buffer('real_label', torch.tensor(target_real_label))
-        self.register_buffer('fake_label', torch.tensor(target_fake_label))
-
-    def get_target_tensor(self, prediction, target_is_real):
-        """Create label tensors with the same size as the input.
-        Parameters:
-            prediction (tensor) - - tpyically the prediction from a discriminator
-            target_is_real (bool) - - if the ground truth label is for real images or fake images
-        Returns:
-            A label tensor filled with ground truth label, and with the size of the input
-        """
-
-        if target_is_real:
-            target_tensor = self.real_label
-        else:
-            target_tensor = self.fake_label
-        return target_tensor.expand_as(prediction)
 
     def L_minus(self, discriminated_A, weights):
-        #computes L- of the paper
-        # A = self.real_A
-        # B = self.fake_B
-        # AB = self.netG_B(A) # TODO
-        # w_a = (nn.Sigmoid(self.net_W_A(A)) + nn.Sigmoid(-self.net_W_B(B))) / 2
         return torch.sum(discriminated_A * 0.5*(1+weights))
 
     def L_plus(self, discriminated_B, weights):
-        #computes L- of the paper
-        # A = self.fake_A
-        # B = self.real_B
-        # BA = self.netG_A(B) # TODO
-        # w_b = (nn.Sigmoid(-self.net_W_A(A)) + nn.Sigmoid(self.net_W_B(B))) / 2
         return torch.sum(discriminated_B * 0.5*(1+weights))
 
     def loss_W(self, L_minus, L_plus):
         """Compute loss for weight network"""
-        return (L_minus - L_plus)**2
+        return abs(L_minus - L_plus)
 
     def loss_G(self, L_minus, L_plus):
         """Compute loss for G network"""
@@ -351,6 +322,40 @@ class weighted_GANLoss(nn.Module):
     def loss_D(self, L_minus, L_plus):
         """Compute loss for D network"""
         return - L_minus + L_plus
+
+class importance_sampling_GANLoss(nn.Module):
+    """Define different GAN objectives.
+    The GANLoss class abstracts away the need to create the target label tensor
+    that has the same size as the input.
+    """
+
+    def __init__(self):
+        """ Initialize the GANLoss class.
+        Parameters:
+            gan_mode (str) - - the type of GAN objective. It currently supports vanilla, lsgan, and wgangp.
+        Note: Do not use sigmoid as the last layer of Discriminator.
+        LSGAN needs no sigmoid. vanilla GANs will handle it with BCEWithLogitsLoss.
+        """
+        super(importance_sampling_GANLoss, self).__init__()
+
+    def L_minus(self, discriminated_A, weights):
+        return torch.sum(discriminated_A * weights/weights.detach())
+
+    def L_plus(self, discriminated_B, weights):
+        return torch.sum(discriminated_B * weights/weights.detach())
+
+    def loss_W(self, L_minus, L_plus):
+        """Compute loss for weight network"""
+        return abs(L_minus - L_plus)
+
+    def loss_G(self, L_minus, L_plus):
+        """Compute loss for G network"""
+        return L_minus - L_plus
+
+    def loss_D(self, L_minus, L_plus):
+        """Compute loss for D network"""
+        return - L_minus + L_plus
+
 
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
@@ -753,35 +758,43 @@ class PixelDiscriminator(nn.Module):
 class DCGANDiscriminator(nn.Module):
     """DCGAN Generator Code. Used as weight network in the paper"""
 
-    def __init__(self, ngpu, nc=3, ndf=64):
+    def __init__(self, ngpu, nc=3, ndf=64, _spectral_norm=True):
         super(DCGANDiscriminator, self).__init__()
         self.ngpu = ngpu
+        self._spectral_norm = _spectral_norm
+
         self.main = nn.Sequential(
             # input is (nc) x 64 x 64
-            spectral_norm(nn.Conv2d(nc, ndf, 4, 2, 1, bias=False)),
+            self.norm(nn.Conv2d(nc, ndf, 4, 2, 1, bias=False)),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
-            spectral_norm(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
+            self.norm(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
             nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*2) x 16 x 16
-            spectral_norm(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
+            self.norm(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*4) x 8 x 8
-            spectral_norm(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 0, bias=False)),
-            #nn.BatchNorm2d(ndf * 8),
+            self.norm(nn.Conv2d(ndf * 4, 1, 4, 2, 0, bias=False)),
+            # nn.BatchNorm2d(ndf * 8),
             # nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
-            # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            # self.norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
             nn.Tanh()
         )
 
-    def forward(self, input):
-        if input.is_cuda and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+    def norm(self, layer):
+        if self._spectral_norm:
+            return spectral_norm(layer)
         else:
-            output = self.main(input)
+            return layer
+
+    def forward(self, input):
+        # if input.is_cuda and self.ngpu > 1:
+        #     output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        # else:
+        output = self.main(input)
 
         return output.view(-1, 1).squeeze(1)
         

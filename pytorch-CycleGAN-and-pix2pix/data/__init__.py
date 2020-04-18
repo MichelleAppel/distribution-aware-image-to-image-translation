@@ -15,7 +15,6 @@ import torch.utils.data
 from data.base_dataset import BaseDataset
 from itertools import repeat
 
-
 def find_dataset_using_name(dataset_name):
     """Import the module "data/[dataset_name]_dataset.py".
 
