@@ -163,20 +163,29 @@ class ImportanceSamplingModel(BaseModel):
         self.loss_D = self.criterionGAN.loss_D(self.L_minus, self.L_plus)
         self.loss_D.backward()
 
-    def optimize_parameters(self):
-        """Update network weights for G and W; it will be called in every training iteration."""
-        
+    def optimize_parameters_G(self):
         self.optimizer_G.zero_grad()   # clear networks existing gradients
         self.forward()                 # call forward to calculate intermediate results
         self.backward_G()              # calculate loss and gradients for network G
         self.optimizer_G.step()        # update gradients for network G
 
+    def optimize_parameters_W(self):
         self.optimizer_W.zero_grad()   # clear networks existing gradients
         self.forward()                 # call forward to calculate intermediate results
         self.backward_W()              # calculate loss and gradients for network  W        
         self.optimizer_W.step()        # update gradients for network W
-        
+
+    def optimize_parameters_D(self):
         self.optimizer_D.zero_grad()   # clear networks existing gradients
         self.forward()                 # call forward to calculate intermediate results
         self.backward_D()              # calculate loss and gradients for network D
         self.optimizer_D.step()        # update gradients for network D
+
+
+    def optimize_parameters(self):
+        """Update network weights for G and W; it will be called in every training iteration."""
+        self.optimize_parameters_G()
+        self.optimize_parameters_D()
+        self.optimize_parameters_W()
+
+        
