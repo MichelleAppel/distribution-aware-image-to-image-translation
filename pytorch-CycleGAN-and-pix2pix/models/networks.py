@@ -156,7 +156,11 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'batch_weight':
-        net = BatchWeightGenerator()
+        if gpu_ids == -1:
+            device = 'cpu'
+        else: 
+            device = 'cuda'
+        net = BatchWeightGenerator(device=device)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -791,10 +795,10 @@ class DCGANDiscriminator(nn.Module):
             return layer
 
     def forward(self, input):
-        # if input.is_cuda and self.ngpu > 1:
-        #     output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
-        # else:
-        output = self.main(input)
+        if input.is_cuda and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        else:
+            output = self.main(input)
 
         return output.view(-1, 1).squeeze(1)
         
@@ -802,7 +806,7 @@ class DCGANDiscriminator(nn.Module):
 class BatchWeightGenerator(nn.Module):
     """Defines a generator from the paper"""
 
-    def __init__(self, input_nc=3, ndf=32, s=2, K=4, c=3, _spectral_norm=True):
+    def __init__(self, input_nc=3, ndf=32, s=2, K=4, c=3, _spectral_norm=True, device='cuda'):
         """Construct a joint discriminator
 
         Parameters:
@@ -814,6 +818,7 @@ class BatchWeightGenerator(nn.Module):
         self.s = s
         self.d = 8
         self._spectral_norm = _spectral_norm
+        self.device=device
 
         self.c_x1 = self.norm(nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=1))
 
@@ -846,7 +851,7 @@ class BatchWeightGenerator(nn.Module):
         x1 = self.c_x2(x1)
         x1 = self.ReLU(x1)
 
-        input_z = torch.normal(0, 1, size=(input_x.shape[0], self.d, 1, 1)).cuda() # The noise vector
+        input_z = torch.normal(0, 1, size=(input_x.shape[0], self.d, 1, 1)).to(self.device) # The noise vector
         z1 = input_z.repeat((1, 1, int(32/self.s), int(32/self.s)))
 
         xz = torch.cat((x1, z1), dim = 1) #M? not sure how to concatenate
