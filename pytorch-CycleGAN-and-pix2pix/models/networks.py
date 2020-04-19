@@ -156,11 +156,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'batch_weight':
-        if gpu_ids == -1:
-            device = 'cpu'
-        else: 
-            device = 'cuda'
-        net = BatchWeightGenerator(device=device)
+        net = BatchWeightGenerator(gpu_ids=gpu_ids)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -806,7 +802,7 @@ class DCGANDiscriminator(nn.Module):
 class BatchWeightGenerator(nn.Module):
     """Defines a generator from the paper"""
 
-    def __init__(self, input_nc=3, ndf=32, s=2, K=4, c=3, _spectral_norm=True, device='cuda'):
+    def __init__(self, gpu_ids, input_nc=3, ndf=32, s=2, K=4, c=3, _spectral_norm=True):
         """Construct a joint discriminator
 
         Parameters:
@@ -818,7 +814,7 @@ class BatchWeightGenerator(nn.Module):
         self.s = s
         self.d = 8
         self._spectral_norm = _spectral_norm
-        self.device=device
+        self.device = torch.device('cuda:{}'.format(gpu_ids[0])) if gpu_ids else torch.device('cpu')
 
         self.c_x1 = self.norm(nn.Conv2d(input_nc, ndf * 2, kernel_size=K, stride=s, padding=1))
 
