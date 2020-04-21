@@ -37,10 +37,12 @@ class ImportanceSamplingModel(BaseModel):
             the modified parser.
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
-        parser.set_defaults(dataset_mode='importance_sampling') # Unaligned for cycleGAN
+        if is_train:
+            parser.set_defaults(dataset_mode='importance_sampling') # Sampling only during training
+        else: 
+            parser.set_defaults(dataset_mode='unaligned')
         
         # The network architectures of D and G
-        
         parser.set_defaults(netG='batch_weight')
         parser.set_defaults(netD='joint')
         parser.set_defaults(num_threads=0)

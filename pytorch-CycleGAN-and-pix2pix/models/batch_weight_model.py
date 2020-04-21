@@ -37,10 +37,9 @@ class BatchWeightModel(BaseModel):
             the modified parser.
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
-        parser.set_defaults(dataset_mode='unaligned') # Unaligned for cycleGAN
+        parser.set_defaults(dataset_mode='unaligned') # Unaligned
         
         # The network architectures of D and G
-        
         parser.set_defaults(netG='batch_weight')
         parser.set_defaults(netD='joint')
 

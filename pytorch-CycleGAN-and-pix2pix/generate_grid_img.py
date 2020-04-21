@@ -60,36 +60,78 @@ if __name__ == '__main__':
             A_paths.append(p)
     transformer = transforms.ToTensor()
 
-    for i in range(0, int(len(A_paths) / 8)):
+    #order images to be displayed:
+    test_imgs_paths = []
+    amount = 16
+    for i in range(0, int(amount)):
         test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
-
-        #order images to be displayed:
-        test_imgs_paths = []
+        # #order images to be displayed:
+        # test_imgs_paths = []
         #first line: results from real A
         test_imgs_paths.append(test_imgs_paths_unordered[4]) #real A
-        test_imgs_paths.append(test_imgs_paths_unordered[1]) #fake B
-        test_imgs_paths.append(test_imgs_paths_unordered[6]) #rec A
-        test_imgs_paths.append(test_imgs_paths_unordered[2]) #idt A
+        # test_imgs_paths.append(test_imgs_paths_unordered[1]) #fake B
+        # test_imgs_paths.append(test_imgs_paths_unordered[6]) #rec A
+        # test_imgs_paths.append(test_imgs_paths_unordered[2]) #idt A
         # second line: results from real B
-        test_imgs_paths.append(test_imgs_paths_unordered[5]) #real B
-        test_imgs_paths.append(test_imgs_paths_unordered[0]) #fake A
-        test_imgs_paths.append(test_imgs_paths_unordered[7]) #rec B
-        test_imgs_paths.append(test_imgs_paths_unordered[3]) #idt B
+        # test_imgs_paths.append(test_imgs_paths_unordered[5]) #real B
+        # test_imgs_paths.append(test_imgs_paths_unordered[0]) #fake A
+        # test_imgs_paths.append(test_imgs_paths_unordered[7]) #rec B
+        # test_imgs_paths.append(test_imgs_paths_unordered[3]) #idt B
+    for i in range(0, int(amount)):
+        test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
+        test_imgs_paths.append(test_imgs_paths_unordered[1]) #fake B
+    for i in range(0, int(amount)):
+        test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
+        test_imgs_paths.append(test_imgs_paths_unordered[6]) #rec A
+    for i in range(0, int(amount)):
+        test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
+        test_imgs_paths.append(test_imgs_paths_unordered[2]) #idt A
 
-        test_img = Image.open(test_imgs_paths[0]).convert('RGB')
-        test_img_tensor = transformer(test_img).repeat(1, 1, 1, 1)
+    test_img = Image.open(test_imgs_paths[0]).convert('RGB')
+    test_img_tensor = transformer(test_img).repeat(1, 1, 1, 1)
 
-        for j in range(1, 7):
-            img = Image.open(test_imgs_paths[j]).convert('RGB')
-            img_tensor = transformer(img).repeat(1, 1, 1, 1)
-            test_img_tensor = torch.cat((test_img_tensor, img_tensor), dim = 0)
+    for j in range(1, 16*4):
+        img = Image.open(test_imgs_paths[j]).convert('RGB')
+        img_tensor = transformer(img).repeat(1, 1, 1, 1)
+        test_img_tensor = torch.cat((test_img_tensor, img_tensor), dim = 0)
 
-        if not os.path.exists(dir_res_save):
-            os.makedirs(dir_res_save)
-        short_path = ntpath.basename(test_imgs_paths_unordered[0])
-        short_path = short_path.replace("_fake_A", "")
-        name = os.path.splitext(short_path)[0]
-        image_name = '%s_grid.png' % (name)
-        image_save_path = os.path.join(dir_res_save, image_name)
-        save_image(test_img_tensor, image_save_path, nrow=4)
+    if not os.path.exists(dir_res_save):
+        os.makedirs(dir_res_save)
+    short_path = ntpath.basename(test_imgs_paths_unordered[0])
+    short_path = short_path.replace("_fake_A", "")
+    name = os.path.splitext(short_path)[0]
+    image_name = '%sB_grid.png' % (name)
+    image_save_path = os.path.join(dir_res_save, image_name)
+    save_image(test_img_tensor, image_save_path, nrow=16, padding=0)
 
+    test_imgs_paths = []
+    amount = 16
+    for i in range(0, int(amount)):
+        test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
+        test_imgs_paths.append(test_imgs_paths_unordered[5]) #real A
+    for i in range(0, int(amount)):
+        test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
+        test_imgs_paths.append(test_imgs_paths_unordered[0]) #fake B
+    for i in range(0, int(amount)):
+        test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
+        test_imgs_paths.append(test_imgs_paths_unordered[7]) #rec A
+    for i in range(0, int(amount)):
+        test_imgs_paths_unordered = A_paths[i*8 : i*8+8]
+        test_imgs_paths.append(test_imgs_paths_unordered[3]) #idt A
+
+    test_img = Image.open(test_imgs_paths[0]).convert('RGB')
+    test_img_tensor = transformer(test_img).repeat(1, 1, 1, 1)
+
+    for j in range(1, 16*4):
+        img = Image.open(test_imgs_paths[j]).convert('RGB')
+        img_tensor = transformer(img).repeat(1, 1, 1, 1)
+        test_img_tensor = torch.cat((test_img_tensor, img_tensor), dim = 0)
+
+    if not os.path.exists(dir_res_save):
+        os.makedirs(dir_res_save)
+    short_path = ntpath.basename(test_imgs_paths_unordered[0])
+    short_path = short_path.replace("_fake_A", "")
+    name = os.path.splitext(short_path)[0]
+    image_name = '%sA_grid.png' % (name)
+    image_save_path = os.path.join(dir_res_save, image_name)
+    save_image(test_img_tensor, image_save_path, nrow=16, padding=0)

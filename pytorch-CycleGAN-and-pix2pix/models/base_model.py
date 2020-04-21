@@ -104,6 +104,7 @@ class BaseModel(ABC):
         with torch.no_grad():
             self.forward()
             self.compute_visuals()
+            self.calculate_cycle_consistency_loss()
 
     def compute_visuals(self):
         """Calculate additional output images for visdom and HTML visualization"""
@@ -112,6 +113,11 @@ class BaseModel(ABC):
     def get_image_paths(self):
         """ Return image paths that are used to load current data"""
         return self.image_paths
+
+    def calculate_cycle_consistency_loss(self):
+        criterionCycle = torch.nn.L1Loss()
+        self.loss_cycle_A = criterionCycle(self.rec_A, self.real_A).item()
+        self.loss_cycle_B = criterionCycle(self.rec_B, self.real_B).item()
 
     def update_learning_rate(self):
         """Update learning rates for all the networks; called at the end of every epoch"""

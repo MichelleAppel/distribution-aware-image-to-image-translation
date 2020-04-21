@@ -46,7 +46,8 @@ class ImportanceSamplingDataset(BaseDataset):
 
     def accept_sample(self, img, weight_network):
         # Returns True if the image is accepted, False if rejected
-        weight = torch.sigmoid(weight_network(img.unsqueeze(0)).detach())
+        out = weight_network(img.unsqueeze(0)).detach()
+        weight = torch.sigmoid(out)
         return bool(list(torch.utils.data.sampler.WeightedRandomSampler([1-weight, weight], 1))[0])
 
     def __getitem__(self, index):

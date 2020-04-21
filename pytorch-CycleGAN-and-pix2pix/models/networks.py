@@ -848,6 +848,7 @@ class BatchWeightGenerator(nn.Module):
         x1 = self.ReLU(x1)
 
         input_z = torch.normal(0, 1, size=(input_x.shape[0], self.d, 1, 1)).to(self.device) # The noise vector
+        # input_z = (torch.rand(input_x.shape[0], self.d, 1, 1)*2 - 1).to(self.device) 
         z1 = input_z.repeat((1, 1, int(32/self.s), int(32/self.s)))
 
         xz = torch.cat((x1, z1), dim = 1) #M? not sure how to concatenate
