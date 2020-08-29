@@ -43,4 +43,4 @@ if __name__ == '__main__':
     save_results.plot_ratios()
     save_results.plot_importances()
     save_results.plot_means()
-    save_results.write_data()
+    save_results.write_data(train)

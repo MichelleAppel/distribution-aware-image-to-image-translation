@@ -103,7 +103,7 @@ class SaveResults():
         plt.legend(['mean_A', 'mean_B'])
         plt.savefig(os.path.join(self.destination, 'means.png'))
 
-    def write_data(self):
+    def write_data(self, train):
         opt = self.opt 
         file_name = opt.CSV_name
         file_path = os.path.join(opt.results_dir, file_name)
@@ -117,10 +117,18 @@ class SaveResults():
                 opt.batch_size_A, 
                 opt.sampled_batch_size,
                 opt.objective_function,
-                'todo',
-                'todo',
-                'todo',
-                'todo']
+                'yes',
+                train.mean[0],
+                train.var[0],
+                train.mean[1],
+                train.var[1],
+                train.mean[0]/train.mean[1],
+                train.ratio01,
+                train.unnorm_ratio01,
+                opt.ratio_B/opt.ratio_A,
+                (1-opt.ratio_B)/(1-opt.ratio_A),
+                (opt.ratio_B/opt.ratio_A) / ((1-opt.ratio_B)/(1-opt.ratio_A)),
+                ((1-opt.ratio_B)/(1-opt.ratio_A)) / (opt.ratio_B/opt.ratio_A)]
 
         with open(file_path, 'a+', newline='') as write_obj:
             # Create a writer object from csv module
