@@ -11,6 +11,8 @@ class Options():
         parser.add_argument('--ratio_A', type=float, default=0.2, help='ratio of dataset A')
         parser.add_argument('--ratio_B', type=float, default=0.5, help='ratio of dataset B')
 
+        parser.add_argument('--importance_sampling', type=int, default=1, help='importance sampling (1), batch weight (0)')
+
         parser.add_argument('--batch_size_A', type=int, default=256, help='batch size of A')
         parser.add_argument('--batch_size_B', type=int, default=64, help='batch size of B')
         parser.add_argument('--sampled_batch_size', type=int, default=64, help='sampled batch size')

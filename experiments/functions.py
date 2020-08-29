@@ -84,30 +84,3 @@ def compute_average_prob(weight_network, dataloader_A, dataloader_B):
     unnorm_ratio01 = torch.tensor(unnorm_weights_batch_list[0]).mean().item() / torch.tensor(unnorm_weights_batch_list[1]).mean().item() # average over list_0, and independently over list_1, and take the quotient
 
     return weights_mean, weights_var, ratio01, unnorm_ratio01
-
-def f_0(labels_A, labels_B, w):
-   '''f = label of the image '''
-
-   L_A  = (labels_A.view(-1) * weight_normalization(w).view(-1)).sum()
-   L_B = (labels_B.float()).mean()
-
-   return L_A, L_B
-
-def f_1(sampled_A, real_B, w_sampled):
-   '''f = mean of each image '''
-
-   L_A  = (torch.mean(sampled_A, dim=[2,3]).view(-1) * (w_sampled/w_sampled.detach()).view(-1)).sum()
-   L_B = (torch.mean(real_B, dim=[2,3])).mean()
-
-   return L_A, L_B
-
-def f_2(real_A, real_B, w):
-   '''f = image itself; each image is weighted, and the sum across all images is computed '''
-
-   #L_A  = (real_A * weight_normalization(w).repeat(28,28,1,1).permute(2,3,0,1)).sum()
-   #L_B = (real_B).mean()
-   
-   L_A  = (sampled_A * (w_sampled/w_sampled.detach()).repeat(28,28,1,1).permute(2,3,0,1) ).sum()
-   L_B = (real_B).mean()
-
-   return L_A, L_B

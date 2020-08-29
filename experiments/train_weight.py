@@ -62,14 +62,6 @@ class Train():
 
                 # The weighting process
                 w, unnorm_w = self.weight_network(real_A)
-                
-                sampled_idx_A = list( # Sample from batch A according to these importances
-                    torch.utils.data.sampler.WeightedRandomSampler(w.squeeze(),
-                                                                self.sampled_batch_size, 
-                                                                replacement=True))
-                w_sampled = w[sampled_idx_A]
-                sampled_A = real_A[sampled_idx_A] # The sampled smaller batch A
-                sampled_labs_A = labels_A[sampled_idx_A]
             
                 # The loss function --------------------------------------------------------------------------------
                 
@@ -77,7 +69,7 @@ class Train():
                 if self.opt.objective_function == 0:
                   L_A, L_B = f_0(labels_A, labels_B, w)
                 else : 
-                  L_A, L_B = self.objective_function(sampled_A, real_B, w_sampled)
+                  L_A, L_B = self.objective_function(real_A, real_B, w)
                 
                 loss_w = ((L_A - L_B)**2).sum() # if f is a hidden variable, L_A and L_B are tensors, hence the sum() after the square
                 

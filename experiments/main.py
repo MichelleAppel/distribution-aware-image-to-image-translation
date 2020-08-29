@@ -2,6 +2,7 @@ import options
 import dataset
 import functions
 import train
+import train_weight
 import network
 import save_results
 
@@ -24,12 +25,20 @@ if __name__ == '__main__':
     # Initialize the networks
     weight_network = network.WeightNet().cuda()
 
-    train = train.Train(weight_network=weight_network,
-                        dataset_A=dataset_A, 
-                        dataloader_A=dataloader_A, 
-                        dataset_B=dataset_B, 
-                        dataloader_B=dataloader_B, 
-                        opt=opt)
+    if opt.importance_sampling == 0:
+      train = train_weight.Train(weight_network=weight_network,
+                          dataset_A=dataset_A, 
+                          dataloader_A=dataloader_A, 
+                          dataset_B=dataset_B, 
+                          dataloader_B=dataloader_B, 
+                          opt=opt)
+    else:
+      train = train.Train(weight_network=weight_network,
+                          dataset_A=dataset_A, 
+                          dataloader_A=dataloader_A, 
+                          dataset_B=dataset_B, 
+                          dataloader_B=dataloader_B, 
+                          opt=opt)
     train.train()
     
 
