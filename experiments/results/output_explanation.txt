@@ -30,6 +30,14 @@ avg weight 0/1: avg weight 0 / avg weight 1
 
 avg batch-avg weight 0/1: Mean weight assigned by the nn to '0' and '1' over each batch, lets call this p('0',batch_i) and p('1',batch_i); compute the ratio q(batch_i) = p('0',batch_i)/p('1',batch_i) for each batch. Do this for all batches and take again the average over all q(batch_i)
 
+avg unnorm weight 0: weight assigned to each 0 image by the nn BEFORE softmax (i.e. for image i, exp(w_i)), averaged over the dataset
+
+variance: its variance
+
+avg unnorm weight 1: weight assigned to each 1 image by the nn BEFORE softmax (i.e. for image i, exp(w_i)), averaged over the dataset
+
+variance: its variance
+
 avg batch-avg unnorm weight 0/1: Values before normalization. Soft-max computes: exp(w_i)/sum_j[exp(w_j)]. Store all exp(w_i) for all i that are '0', lets call this list_0. And the same for '1', lets call it list_1. Then compute the average over list_0, and independently over list_1. Is the quotient of the two estimates our desired value? Note, here we never normalize by sum_j[exp(w_j)]; this cancels out
 
 increase of 0
