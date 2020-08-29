@@ -101,13 +101,13 @@ class Train():
                 self.example_importances_A += [(w_a[0].item(), w_a[1].item())] # Store examples in a list
 
                 if i % 5 == 0: # compute avg and var every 5 steps because it's quite slow
-                    mean, var, ratio01, unnorm_ratio01 = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
+                    mean, var, ratio01, unnorm_ratio01, unnorm_mean, unnorm_var = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
                 for key in mean.keys():
                     if (key not in self.w_means.keys()):
                         self.w_means[key] = []
                         self.w_vars[key] = [] 
-                    self.w_means[key] += [mean[key]]
-                    self.w_vars[key] += [var[key]]
+                    self.w_means[key] += [unnorm_mean[key]] #[mean[key]]
+                    self.w_vars[key] += [unnorm_var[key]] #[var[key]]
                     self.ratio01s += [ratio01]
                     self.unnorm_ratio01s += [unnorm_ratio01]
 
@@ -120,4 +120,4 @@ class Train():
                 if i % self.opt.max_steps == 0 and i != 0:
                     break
 
-        self.mean, self.var, self.ratio01, self.unnorm_ratio01 = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
+        self.mean, self.var, self.ratio01, self.unnorm_ratio01, self.unnorm_mean, self.unnorm_var = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)

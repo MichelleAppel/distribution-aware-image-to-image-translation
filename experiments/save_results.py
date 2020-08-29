@@ -18,13 +18,13 @@ class SaveResults():
         fig.suptitle('Weights means and variances collected during the training')
 
         axs[0, 0].plot(self.train.w_means[0])
-        axs[0, 0].set_title('Mean weight for 0s')
+        axs[0, 0].set_title('Mean (unnormalized) weight for 0s')
         axs[0, 1].plot(self.train.w_vars[0], 'tab:orange')
-        axs[0, 1].set_title('Variance of weights for 0s')
+        axs[0, 1].set_title('Variance of (unnormalized) weights for 0s')
         axs[1, 0].plot(self.train.w_means[1], 'tab:green')
-        axs[1, 0].set_title('Mean weight for 1s')
+        axs[1, 0].set_title('Mean (unnormalized) weight for 1s')
         axs[1, 1].plot(self.train.w_vars[1], 'tab:red')
-        axs[1, 1].set_title('Variance of weights for 1s')
+        axs[1, 1].set_title('Variance of (unnormalized) weights for 1s')
 
         for ax in axs[:,0]:
             ax.set(xlabel='iterations / 5', ylabel='Mean')
@@ -42,7 +42,7 @@ class SaveResults():
         plt.close()
 
         plt.figure(figsize=(10,6))
-        plt.title('Ratio between the averages of not normalized weights for the classes')
+        plt.title('Ratio between the averages of unnormalized weights for the classes')
         plt.xlabel('Training iterations')
         plt.ylabel('Unnormalized Ratio 0/1')
         # plt.yscale('symlog')
@@ -124,6 +124,10 @@ class SaveResults():
                 train.var[1],
                 train.mean[0]/train.mean[1],
                 train.ratio01,
+                train.unnorm_mean[0],
+                train.unnorm_var[0],
+                train.unnorm_mean[1],
+                train.unnorm_var[1],
                 train.unnorm_ratio01,
                 opt.ratio_B/opt.ratio_A,
                 (1-opt.ratio_B)/(1-opt.ratio_A),

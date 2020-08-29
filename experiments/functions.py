@@ -51,6 +51,8 @@ def compute_average_prob(weight_network, dataloader_A, dataloader_B):
     mean_weight_batch = collections.defaultdict(float)
     ratio01s = []
     unnorm_weights_batch_list = collections.defaultdict(torch.tensor)
+    unnorm_weights_mean = collections.defaultdict(float)
+    unnorm_weights_var = collections.defaultdict(float)
     
     for i, (batch_A, batch_B) in enumerate(zip(dataloader_A, dataloader_B)):
 
@@ -61,6 +63,7 @@ def compute_average_prob(weight_network, dataloader_A, dataloader_B):
         possible_labels, _ = torch.unique(labels_A).sort()
         for l in possible_labels:
             indices_with_label_l = labels_A == l.item()
+
             if l not in weights_total.keys():
               weights_total[l.item()] = weights_batch[indices_with_label_l]
             else:
@@ -78,9 +81,12 @@ def compute_average_prob(weight_network, dataloader_A, dataloader_B):
     for key in weights_total.keys():
         weights_mean[key] = weights_total[key].mean().item()
         weights_var[key] = weights_total[key].var().item()
+
+        unnorm_weights_mean[key] = unnorm_weights_batch_list[key].mean().item()
+        unnorm_weights_var[key] = unnorm_weights_batch_list[key].var().item()
     
     ratio01 = torch.tensor(ratio01s).mean().item() # average over all q(batch_i)
 
     unnorm_ratio01 = torch.tensor(unnorm_weights_batch_list[0]).mean().item() / torch.tensor(unnorm_weights_batch_list[1]).mean().item() # average over list_0, and independently over list_1, and take the quotient
 
-    return weights_mean, weights_var, ratio01, unnorm_ratio01
+    return weights_mean, weights_var, ratio01, unnorm_ratio01, unnorm_weights_mean, unnorm_weights_var
