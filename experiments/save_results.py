@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 
 class SaveResults():
 
-    def __init__(self, destination, train, opt):
+    def __init__(self, destination, train, test, opt):
         self.destination = destination
         self.train = train
+        self.test = test
         self.opt = opt
 
     def plot_meansandvars(self):
@@ -103,7 +104,8 @@ class SaveResults():
         plt.legend(['mean_A', 'mean_B'])
         plt.savefig(os.path.join(self.destination, 'means.png'))
 
-    def write_data(self, train):
+    def write_data(self):
+        test = self.test
         opt = self.opt 
         file_name = opt.CSV_name
         file_path = os.path.join(opt.results_dir, file_name)
@@ -118,17 +120,17 @@ class SaveResults():
                 opt.sampled_batch_size,
                 opt.objective_function,
                 'yes',
-                train.mean[0],
-                train.var[0],
-                train.mean[1],
-                train.var[1],
-                train.mean[0]/train.mean[1],
-                train.ratio01,
-                train.unnorm_mean[0],
-                train.unnorm_var[0],
-                train.unnorm_mean[1],
-                train.unnorm_var[1],
-                train.unnorm_ratio01,
+                test.mean[0],
+                test.var[0],
+                test.mean[1],
+                test.var[1],
+                test.mean[0]/test.mean[1],
+                test.ratio01,
+                test.unnorm_mean[0],
+                test.unnorm_var[0],
+                test.unnorm_mean[1],
+                test.unnorm_var[1],
+                test.unnorm_ratio01,
                 opt.ratio_B/opt.ratio_A,
                 (1-opt.ratio_B)/(1-opt.ratio_A),
                 (opt.ratio_B/opt.ratio_A) / ((1-opt.ratio_B)/(1-opt.ratio_A)),

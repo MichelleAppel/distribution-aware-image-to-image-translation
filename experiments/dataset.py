@@ -4,11 +4,11 @@ import torchvision
 
 import numpy as np
 
-def MNIST_binary_data(ratio=0.5):
+def MNIST_binary_data(ratio=0.5, train=True):
     # ratio: percentage of zeroes
     #returns (data, labels) for MNIST with only zeroes and ones, with the given ratio
 
-    MNIST = torchvision.datasets.MNIST('./files/', train=True, download=True,
+    MNIST = torchvision.datasets.MNIST('./files/', train=train, download=True,
                              transform=torchvision.transforms.Compose([
                                torchvision.transforms.ToTensor(),
                                torchvision.transforms.Normalize(
@@ -56,11 +56,11 @@ def MNIST_binary_data(ratio=0.5):
 class MNISTDataset(Dataset):
     '''The dataset for the MNIST binary data
     '''
-    def __init__(self, ratio=0.5):
+    def __init__(self, ratio=0.5, train=True):
 
         self.ratio = ratio
         
-        self.dataset = MNIST_binary_data(ratio=self.ratio)
+        self.dataset = MNIST_binary_data(ratio=self.ratio, train=train)
         
         self.example_imgs = self.example()
         

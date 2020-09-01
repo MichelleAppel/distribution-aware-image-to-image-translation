@@ -7,7 +7,8 @@ from network import f_0, f_1, f_2, f_3, f_4
 
 class Train():
 
-    def __init__(self, weight_network, dataset_A, dataloader_A, dataset_B, dataloader_B, opt):
+    def __init__(self, weight_network, dataset_A, dataloader_A, dataset_B, dataloader_B, opt, is_train=True):
+        self.is_train = is_train
         self.opt = opt
 
         self.sampled_batch_size = opt.sampled_batch_size
@@ -87,9 +88,10 @@ class Train():
                 # ---------------------------------------------------------------------------------------------------
 
                 # Backward
-                self.optimizer_w.zero_grad()
-                loss_w.backward()
-                self.optimizer_w.step()   
+                if self.is_train:
+                    self.optimizer_w.zero_grad()
+                    loss_w.backward()
+                    self.optimizer_w.step()   
 
                 # Store values --------------------------------------------------------------------------------------
                 self.L_As += [L_A.sum().item()] # if f is a hidden variable, L_A and L_B are tensors, hence the sum()
