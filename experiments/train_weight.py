@@ -85,7 +85,7 @@ class Train():
                 # ---------------------------------------------------------------------------------------------------
 
                 # Backward
-                if is_train:
+                if self.is_train:
                     self.optimizer_w.zero_grad()
                     loss_w.backward()
                     self.optimizer_w.step()   
@@ -161,4 +161,4 @@ class Train():
                 if i % self.opt.max_steps == 0 and i != 0:
                     break
 
-        self.mean, self.var, self.ratio01, self.unnorm_ratio01 = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
+        self.mean, self.var, self.ratio01, self.unnorm_ratio01, self.unnorm_mean, self.unnorm_var = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
