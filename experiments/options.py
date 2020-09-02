@@ -8,6 +8,8 @@ class Options():
 
     def initialize(self, parser):
 
+        parser.add_argument('--dataset', type=str, default='MNIST', help='ratio of dataset A')
+
         parser.add_argument('--ratio_A', type=float, default=0.2, help='ratio of dataset A')
         parser.add_argument('--ratio_B', type=float, default=0.5, help='ratio of dataset B')
 

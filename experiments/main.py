@@ -12,11 +12,11 @@ if __name__ == '__main__':
     opt = options.Options().parser.parse_args()
 
     ratio_A = opt.ratio_A
-    dataset_A = dataset.MNISTDataset(ratio=ratio_A, train=True)
+    dataset_A = dataset.Dataset(ratio=ratio_A, train=True, dataset=opt.dataset)
     dataloader_A = dataset.DataLoader(dataset_A, batch_size=opt.batch_size_A, shuffle=True)
 
     ratio_B = opt.ratio_B
-    dataset_B = dataset.MNISTDataset(ratio=ratio_B, train=True)
+    dataset_B = dataset.Dataset(ratio=ratio_B, train=True, dataset=opt.dataset)
     dataloader_B = dataset.DataLoader(dataset_B, batch_size=opt.batch_size_B, shuffle=True)
 
     sampled_batch_size = opt.sampled_batch_size

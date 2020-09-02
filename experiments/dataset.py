@@ -4,19 +4,35 @@ import torchvision
 
 import numpy as np
 
-def MNIST_binary_data(ratio=0.5, train=True):
+def binary_data(ratio=0.5, train=True, dataset='MNIST'):
     # ratio: percentage of zeroes
     #returns (data, labels) for MNIST with only zeroes and ones, with the given ratio
 
-    MNIST = torchvision.datasets.MNIST('./files/', train=train, download=True,
-                             transform=torchvision.transforms.Compose([
-                               torchvision.transforms.ToTensor(),
-                               torchvision.transforms.Normalize(
-                                 (0.1307,), (0.3081,))
-                             ]))
-    
-    idxm0 = MNIST.train_labels==0
-    idxm1 = MNIST.train_labels==1 
+    if dataset == 'MNIST':
+      data = torchvision.datasets.MNIST('./files/', train=train, download=True,
+                              transform=torchvision.transforms.Compose([
+                                torchvision.transforms.ToTensor(),
+                                torchvision.transforms.Normalize(
+                                  (0.1307,), (0.3081,))
+                              ]))
+    else:
+      if train:
+        split = 'train'
+      else:
+        split = 'test'
+      data = torchvision.datasets.SVHN('./files/', split=split, download=True,
+                              transform=torchvision.transforms.Compose([
+                                torchvision.transforms.ToTensor(),
+                                torchvision.transforms.Normalize(
+                                  (0.1307,), (0.3081,))
+                              ]))     
+
+    if dataset == 'MNIST':
+      idxm0 = data.train_labels==0
+      idxm1 = data.train_labels==1 
+    else:
+      idxm0 = torch.Tensor(data.labels)==0
+      idxm1 = torch.Tensor(data.labels)==1       
     dim = len(idxm0)  
 
     n0 = torch.sum(idxm0)
@@ -48,19 +64,22 @@ def MNIST_binary_data(ratio=0.5, train=True):
     #labels = MNIST.train_labels[idxm]
     #data = MNIST.train_data[idxm]
 
-    MNIST.targets = MNIST.train_labels[idx]
-    MNIST.data = MNIST.train_data[idx]
+    if dataset == 'MNIST':
+      data.targets = data.train_labels[idx]
+    else:
+      data.targets = data.labels[idx]
+    data.data = data.data[idx]
 
-    return MNIST 
+    return data 
 
-class MNISTDataset(Dataset):
+class Dataset(Dataset):
     '''The dataset for the MNIST binary data
     '''
-    def __init__(self, ratio=0.5, train=True):
+    def __init__(self, ratio=0.5, train=True, dataset='MNIST'):
 
         self.ratio = ratio
         
-        self.dataset = MNIST_binary_data(ratio=self.ratio, train=train)
+        self.dataset = binary_data(ratio=self.ratio, train=train, dataset=dataset)
         
         self.example_imgs = self.example()
         

@@ -60,7 +60,7 @@ class Train():
                 real_B = batch_B[0].cuda()
                 labels_A = batch_A[1].cuda()
                 labels_B = batch_B[1].cuda()
-
+                
                 # The weighting process
                 w, unnorm_w = self.weight_network(real_A)
                 
