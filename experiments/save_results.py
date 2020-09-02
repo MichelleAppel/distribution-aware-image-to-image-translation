@@ -61,6 +61,16 @@ class SaveResults():
         plt.legend(['W'])
         plt.savefig(os.path.join(self.destination, 'w_losses.png'))
 
+    def plot_test_w_loss(self):
+        plt.figure(figsize=(10,6))
+        plt.title('Losses for the TEST set over iterations')
+        plt.xlabel('Training iterations')
+        plt.ylabel('Loss')
+        # plt.yscale('symlog')
+        plt.plot(self.train.test_losses_w)
+        plt.legend(['W'])
+        plt.savefig(os.path.join(self.destination, 'w_test_losses.png'))
+
     def plot_L_loss(self):
         plt.figure(figsize=(10,6))
         plt.title('Losses over iterations')

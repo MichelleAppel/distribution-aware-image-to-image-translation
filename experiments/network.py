@@ -227,16 +227,16 @@ def f_2(sampled_A, real_B, w):
 
    return L_A, L_B
 
-def f_3(real_A, real_b, w):
+def f_3(real_A, real_B, w):
    '''f = output of a fixed (not-trained and randomly initialized) NN for the image'''
    
    ''' Architectures that work: '''
-   #f=f_Net_1fcl().cuda() # 1 fcl
+   f=f_Net_1fcl().cuda() # 1 fcl
    #f=f_Net_2fcl().cuda() # 2 fcl
 
    ''' Architectures that do not work: '''
    #f=f_Net_1cl1fcl().cuda() # 1 cl 1 fcl  
-   f=f_Net_3fcl().cuda() # 3 fcl
+   #f=f_Net_3fcl().cuda() # 3 fcl
    #f=f_Net_4fcl().cuda() # 4 fcl
    #f=f_Net_2cl2fcl().cuda() # 2 cl 2 fcl
    

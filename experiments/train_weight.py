@@ -7,7 +7,7 @@ from network import f_0, f_1, f_2, f_3, f_4
 
 class Train():
 
-    def __init__(self, weight_network, dataset_A, dataloader_A, dataset_B, dataloader_B, opt, is_train=True):
+    def __init__(self, weight_network, dataset_A, dataloader_A, dataset_B, dataloader_B, opt, testloader_A, testloader_B, is_train=True):
         self.is_train = is_train
         self.opt = opt
 
@@ -48,6 +48,11 @@ class Train():
         self.var = 0
         self.ratio01 = 0
         self.unnorm_ratio01 = 0
+
+        # Test sets loaders
+        self.testloader_A = testloader_A
+        self.testloader_B = testloader_B
+        self.test_losses_w = [] 
 
     def weight_normalization(self, w):
         return w
@@ -94,16 +99,58 @@ class Train():
                 w_a = self.weight_normalization((self.weight_network(self.dataset_A.example_imgs.float().unsqueeze(1).cuda())[0]))
                 self.example_importances_A += [(w_a[0].item(), w_a[1].item())] # Store examples in a list
 
+                # VALIDATION statistics: every once in a while during training, we compute the loss and weights on the validation (test) set
                 if i % 5 == 0: # compute avg and var every 5 steps because it's quite slow
-                    mean, var, ratio01, unnorm_ratio01 = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
-                for key in mean.keys():
-                    if (key not in self.w_means.keys()):
-                        self.w_means[key] = []
-                        self.w_vars[key] = [] 
-                    self.w_means[key] += [mean[key]]
-                    self.w_vars[key] += [var[key]]
-                    self.ratio01s += [ratio01]
-                    self.unnorm_ratio01s += [unnorm_ratio01]
+                    '''
+                     # compute mean and var for the weights and for unnormalized weights (on the training set)
+                    mean, var, ratio01, unnorm_ratio01, unnorm_mean, unnorm_var = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
+                    for key in mean.keys():
+                        if (key not in self.w_means.keys()):
+                            self.w_means[key] = []
+                            self.w_vars[key] = [] 
+                        self.w_means[key] += [unnorm_mean[key]] #[mean[key]]
+                        self.w_vars[key] += [unnorm_var[key]] #[var[key]]
+                        self.ratio01s += [ratio01]
+                        self.unnorm_ratio01s += [unnorm_ratio01]'''
+                    # compute mean and var for the weights and for unnormalized weights (on the test set)
+                    mean, var, ratio01, unnorm_ratio01, unnorm_mean, unnorm_var = compute_average_prob(self.weight_network, self.testloader_A, self.testloader_B)
+                    for key in mean.keys():
+                        if (key not in self.w_means.keys()):
+                            self.w_means[key] = []
+                            self.w_vars[key] = [] 
+                        self.w_means[key] += [unnorm_mean[key]] #[mean[key]]
+                        self.w_vars[key] += [unnorm_var[key]] #[var[key]]
+                        self.ratio01s += [ratio01]
+                        self.unnorm_ratio01s += [unnorm_ratio01]
+                    
+                    # compute the loss on the test set
+                    for j, (batch_A, batch_B) in enumerate(zip(self.testloader_A, self.testloader_B)):
+                      real_A = batch_A[0].cuda()
+                      real_B = batch_B[0].cuda()
+                      labels_A = batch_A[1].cuda()
+                      labels_B = batch_B[1].cuda()
+                      
+                      # The weighting process
+                      w, unnorm_w = self.weight_network(real_A)
+                      
+                      sampled_idx_A = list( # Sample from batch A according to these importances
+                          torch.utils.data.sampler.WeightedRandomSampler(w.squeeze(),
+                                                                      self.sampled_batch_size, 
+                                                                      replacement=True))
+                      w_sampled = w[sampled_idx_A]
+                      sampled_A = real_A[sampled_idx_A] # The sampled smaller batch A
+                      sampled_labs_A = labels_A[sampled_idx_A]
+                  
+                      # The loss function --------------------------------------------------------------------------------
+                      # Using f as objective function
+                      if self.opt.objective_function == 0:
+                        L_A, L_B = f_0(labels_A, labels_B, w)
+                      else : 
+                        L_A, L_B = self.objective_function(sampled_A, real_B, w_sampled)
+                      
+                      loss_w = ((L_A - L_B)**2).sum() # if f is a hidden variable, L_A and L_B are tensors, hence the sum() after the square
+                    
+                    self.test_losses_w += [loss_w.item()]
 
                 # ---------------------------------------------------------------------------------------------------
 
