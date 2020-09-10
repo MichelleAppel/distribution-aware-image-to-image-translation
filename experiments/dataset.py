@@ -72,7 +72,7 @@ def binary_data(ratio=0.5, train=True, dataset='MNIST'):
 
     return data 
 
-class Dataset(Dataset):
+class CustomDataset(Dataset):
     '''The dataset for the MNIST binary data
     '''
     def __init__(self, ratio=0.5, train=True, dataset='MNIST'):

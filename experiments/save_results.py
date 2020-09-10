@@ -5,6 +5,7 @@ from csv import writer
 import torch
 import matplotlib.pyplot as plt
 
+from functions import visualize_img_batch
 
 class SaveResults():
 

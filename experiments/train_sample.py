@@ -2,8 +2,10 @@ import torch
 import torch.optim as optim
 import collections
 
-from functions import compute_average_prob
+from functions import compute_average_prob, visualize_img_batch
 from network import f_0, f_1, f_2, f_3, f_4
+
+import matplotlib.pyplot as plt
 
 class Train():
 
@@ -65,6 +67,9 @@ class Train():
                 real_B = batch_B[0].cuda()
                 labels_A = batch_A[1].cuda()
                 labels_B = batch_B[1].cuda()
+
+                # visualize_img_batch(real_A.cpu()) # Visualize batch
+                # visualize_img_batch(real_B.cpu())
                 
                 # The weighting process
                 w, unnorm_w = self.weight_network(real_A)
@@ -76,6 +81,8 @@ class Train():
                 w_sampled = w[sampled_idx_A]
                 sampled_A = real_A[sampled_idx_A] # The sampled smaller batch A
                 sampled_labs_A = labels_A[sampled_idx_A]
+
+                # visualize_img_batch(sampled_A.cpu())
             
                 # The loss function --------------------------------------------------------------------------------
                 
@@ -163,7 +170,7 @@ class Train():
                 # ---------------------------------------------------------------------------------------------------
 
                 # Print statistics
-                if i % 5 == 0:
+                if i % 1 == 0:
                     print('epoch', epoch, 'step', i, 'loss_w: ', loss_w.item())
                     
                 if i % self.opt.max_steps == 0 and i != 0:

@@ -61,10 +61,10 @@ class Train():
         for epoch in range(self.n_epochs):
             for i, (batch_A, batch_B) in enumerate(zip(self.dataloader_A, self.dataloader_B)):
 
-                real_A = batch_A[0].cuda()
-                real_B = batch_B[0].cuda()
-                labels_A = batch_A[1].cuda()
-                labels_B = batch_B[1].cuda()
+                real_A = batch_A[0].cuda().detach()
+                real_B = batch_B[0].cuda().detach()
+                labels_A = batch_A[1].cuda().detach()
+                labels_B = batch_B[1].cuda().detach()
 
                 # The weighting process
                 w, unnorm_w = self.weight_network(real_A)
@@ -100,7 +100,7 @@ class Train():
                 self.example_importances_A += [(w_a[0].item(), w_a[1].item())] # Store examples in a list
 
                 # VALIDATION statistics: every once in a while during training, we compute the loss and weights on the validation (test) set
-                if i % 5 == 0: # compute avg and var every 5 steps because it's quite slow
+                if i % 1 == 0: # compute avg and var every 5 steps because it's quite slow
                     '''
                      # compute mean and var for the weights and for unnormalized weights (on the training set)
                     mean, var, ratio01, unnorm_ratio01, unnorm_mean, unnorm_var = compute_average_prob(self.weight_network, self.dataloader_A, self.dataloader_B)
@@ -124,39 +124,31 @@ class Train():
                         self.unnorm_ratio01s += [unnorm_ratio01]
                     
                     # compute the loss on the test set
-                    for j, (batch_A, batch_B) in enumerate(zip(self.testloader_A, self.testloader_B)):
-                      real_A = batch_A[0].cuda()
-                      real_B = batch_B[0].cuda()
-                      labels_A = batch_A[1].cuda()
-                      labels_B = batch_B[1].cuda()
+                    for j, (batch_A_test, batch_B_test) in enumerate(zip(self.testloader_A, self.testloader_B)):
+                      real_A_test = batch_A_test[0].cuda().detach()
+                      real_B_test = batch_B_test[0].cuda().detach()
+                      labels_A_test = batch_A_test[1].cuda().detach()
+                      labels_B_test = batch_B_test[1].cuda().detach()
                       
                       # The weighting process
-                      w, unnorm_w = self.weight_network(real_A)
+                      test_w, test_unnorm_w = self.weight_network(real_A_test)
                       
-                      sampled_idx_A = list( # Sample from batch A according to these importances
-                          torch.utils.data.sampler.WeightedRandomSampler(w.squeeze(),
-                                                                      self.sampled_batch_size, 
-                                                                      replacement=True))
-                      w_sampled = w[sampled_idx_A]
-                      sampled_A = real_A[sampled_idx_A] # The sampled smaller batch A
-                      sampled_labs_A = labels_A[sampled_idx_A]
-                  
                       # The loss function --------------------------------------------------------------------------------
                       # Using f as objective function
                       if self.opt.objective_function == 0:
-                        L_A, L_B = f_0(labels_A, labels_B, w)
+                        L_A_test, L_B_test = f_0(labels_A_test, labels_B_test, test_w)
                       else : 
-                        L_A, L_B = self.objective_function(sampled_A, real_B, w_sampled)
+                        L_A_test, L_B_test = self.objective_function(real_A_test, real_B_test, test_w)
                       
-                      loss_w = ((L_A - L_B)**2).sum() # if f is a hidden variable, L_A and L_B are tensors, hence the sum() after the square
+                      test_loss_w = ((L_A_test - L_B_test)**2).sum() # if f is a hidden variable, L_A and L_B are tensors, hence the sum() after the square
                     
-                    self.test_losses_w += [loss_w.item()]
+                    self.test_losses_w += [test_loss_w.item()]
 
                 # ---------------------------------------------------------------------------------------------------
 
                 # Print statistics
-                if i % 5 == 0:
-                    print('epoch', epoch, 'step', i, 'loss_w: ', loss_w.item())
+                if i % 1 == 0:
+                    print('epoch', epoch, 'step', i, 'train_loss_w: ', loss_w.item(), 'test_loss_w:', test_loss_w.item())
                     
                 if i % self.opt.max_steps == 0 and i != 0:
                     break

@@ -1,4 +1,5 @@
 import torch
+from torchvision.utils import make_grid
 
 import collections
 
@@ -12,9 +13,10 @@ def visualize_img_batch(batch):
     Parameters:
     batch (Tensor): An image batch
     '''
-    grid = make_grid(batch.unsqueeze(1).unsqueeze(1).cpu(), nrow=8, padding=1, normalize=False, range=None, scale_each=False, pad_value=0.5)
+    grid = make_grid(batch.cpu(), nrow=8, padding=1, normalize=True, range=None, scale_each=False, pad_value=0.5)
     plt.imshow(grid.permute(1,2,0))
     plt.show()
+    plt.close()
 
 def visualize_MNIST_img_batch(batch):
     '''Visualizes image batch for MNIST
@@ -90,3 +92,4 @@ def compute_average_prob(weight_network, dataloader_A, dataloader_B):
     unnorm_ratio01 = torch.tensor(unnorm_weights_batch_list[0]).mean().item() / torch.tensor(unnorm_weights_batch_list[1]).mean().item() # average over list_0, and independently over list_1, and take the quotient
 
     return weights_mean, weights_var, ratio01, unnorm_ratio01, unnorm_weights_mean, unnorm_weights_var
+
