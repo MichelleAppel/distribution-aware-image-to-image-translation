@@ -111,7 +111,7 @@ class Train():
                 
                 self.losses_w += [loss_w.item()]
                 
-                w_a = self.weight_normalization((self.weight_network(self.dataset_A.example_imgs.float().unsqueeze(1).cuda())[1]))
+                w_a = self.weight_normalization((self.weight_network(self.dataset_A.example_imgs.float().unsqueeze(1).cuda())[1])).detach()
                 self.example_importances_A += [(w_a[0].item(), w_a[1].item())] # Store examples in a list
 
                 if i % 5 == 0:

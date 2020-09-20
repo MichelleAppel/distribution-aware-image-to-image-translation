@@ -90,8 +90,8 @@ class CustomDataset(Dataset):
         '''
         labels = self.dataset.targets
         data = self.dataset.data
-        img0 = self.__getitem__([labels==0][0].nonzero()[0].item())
-        img1 = self.__getitem__([labels==1][0].nonzero()[0].item())
+        img0 = self.__getitem__([labels==0][0].nonzero()[0].item())[0]
+        img1 = self.__getitem__([labels==1][0].nonzero()[0].item())[0]
         ex = torch.cat((img0, img1), 0)
               
         return ex
