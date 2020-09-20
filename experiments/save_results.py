@@ -96,7 +96,7 @@ class SaveResults():
         lambd = torch.linspace(0, 1, 64).repeat(28,28,1,1).permute(3,2,0,1)
         lin_comb = lambd * self.train.dataset_A.example_imgs[0] + (1-lambd) * self.train.dataset_A.example_imgs[1]
 
-        weights, _ = self.train.weight_network(lin_comb.cuda())
+        _, weights = self.train.weight_network(lin_comb.cuda())
         weights = weights.cpu().detach().numpy()
         plt.figure(figsize=(10,6))
         plt.title('Assigned importances for linear combination between images of 0 and 1 [lambda * 0 + (1-lambda * 1)]')

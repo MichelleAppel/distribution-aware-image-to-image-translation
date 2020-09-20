@@ -73,7 +73,7 @@ class Train():
                 
                 # Using f as objective function
                 if self.opt.objective_function == 0:
-                  L_A, L_B = f_0(labels_A, labels_B, w)
+                  L_A, L_B = f_0(labels_A, labels_B)
                 else : 
                   L_A, L_B = self.objective_function(real_A, real_B, w)
                 

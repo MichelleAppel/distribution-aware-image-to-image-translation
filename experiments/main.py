@@ -1,8 +1,7 @@
 import options
 import dataset
 import functions
-import train_sample
-import train_weight
+import train
 import network
 import save_results
 
@@ -31,56 +30,36 @@ if __name__ == '__main__':
     # Initialize the networks
     weight_network = network.WeightNet().cuda()
 
-    if opt.importance_sampling == 0:
-      train = train_weight.Train(weight_network=weight_network,
-                          dataset_A=dataset_A, 
-                          dataloader_A=dataloader_A, 
-                          dataset_B=dataset_B, 
-                          dataloader_B=dataloader_B, 
-                          opt=opt,
-                          testloader_A = testloader_A,
-                          testloader_B = testloader_B,
-                          is_train=True)
-    else:
-      train = train_sample.Train(weight_network=weight_network,
-                          dataset_A=dataset_A, 
-                          dataloader_A=dataloader_A, 
-                          dataset_B=dataset_B, 
-                          dataloader_B=dataloader_B, 
-                          opt=opt,
-                          testloader_A = testloader_A,
-                          testloader_B = testloader_B,
-                          is_train=True)
-    train.train()
+    _train = train.Train(weight_network=weight_network,
+                        dataset_A=dataset_A, 
+                        dataloader_A=dataloader_A, 
+                        dataset_B=dataset_B, 
+                        dataloader_B=dataloader_B, 
+                        opt=opt,
+                        testloader_A = testloader_A,
+                        testloader_B = testloader_B,
+                        is_train=True)
+
+    _train.train()
 
     # Test
 
-    if opt.importance_sampling == 0:
-      test = train_weight.Train(weight_network=weight_network,
-                          dataset_A=testset_A, 
-                          dataloader_A=testloader_A, 
-                          dataset_B=testset_B, 
-                          dataloader_B=testloader_B, 
-                          opt=opt,
-                          testloader_A = testloader_A,
-                          testloader_B = testloader_B,
-                          is_train=False)
-    else:
-      test = train_sample.Train(weight_network=weight_network,
-                          dataset_A=testset_A, 
-                          dataloader_A=testloader_A, 
-                          dataset_B=testset_B, 
-                          dataloader_B=testloader_B, 
-                          opt=opt,
-                          testloader_A = testloader_A,
-                          testloader_B = testloader_B,
-                          is_train=False)
+    test = train.Train(weight_network=weight_network,
+                        dataset_A=testset_A, 
+                        dataloader_A=testloader_A, 
+                        dataset_B=testset_B, 
+                        dataloader_B=testloader_B, 
+                        opt=opt,
+                        testloader_A = testloader_A,
+                        testloader_B = testloader_B,
+                        is_train=False)
+
     test.mean, test.var, test.ratio01, test.unnorm_ratio01, test.unnorm_mean, test.unnorm_var = functions.compute_average_prob(weight_network, testloader_A, testloader_B)
 
 
     destination = os.path.join(opt.results_dir, opt.experiment_name)
     os.makedirs(destination, exist_ok=True)
-    save_results = save_results.SaveResults(destination, train, test, opt)
+    save_results = save_results.SaveResults(destination, _train, test, opt)
 
     save_results.plot_meansandvars()
     save_results.plot_w_loss()

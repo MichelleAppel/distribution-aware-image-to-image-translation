@@ -28,8 +28,8 @@ def binary_data(ratio=0.5, train=True, dataset='MNIST'):
                               ]))     
 
     if dataset == 'MNIST':
-      idxm0 = data.train_labels==0
-      idxm1 = data.train_labels==1 
+      idxm0 = data.targets==0
+      idxm1 = data.targets==1 
     else:
       idxm0 = torch.Tensor(data.labels)==0
       idxm1 = torch.Tensor(data.labels)==1       
@@ -65,7 +65,7 @@ def binary_data(ratio=0.5, train=True, dataset='MNIST'):
     #data = MNIST.train_data[idxm]
 
     if dataset == 'MNIST':
-      data.targets = data.train_labels[idx]
+      data.targets = data.targets[idx]
     else:
       data.targets = data.labels[idx]
     data.data = data.data[idx]
@@ -90,8 +90,8 @@ class CustomDataset(Dataset):
         '''
         labels = self.dataset.targets
         data = self.dataset.data
-        img0 = data[labels==0][0].unsqueeze(0)
-        img1 = data[labels==1][0].unsqueeze(0)
+        img0 = self.__getitem__([labels==0][0].nonzero()[0].item())
+        img1 = self.__getitem__([labels==1][0].nonzero()[0].item())
         ex = torch.cat((img0, img1), 0)
               
         return ex
