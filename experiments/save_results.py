@@ -92,6 +92,15 @@ class SaveResults():
         plt.xlabel('Training iterations')
         plt.savefig(os.path.join(self.destination, 'ratios.png'))
 
+        plt.figure(figsize=(10,6))
+        plt.title('Assigned importances for the toy example images over the course of training')
+        plt.plot(self.train.example_importances_A_sm)
+        plt.legend(['Img A with value {} (p={})'.format(0, self.opt.ratio_A), 
+                    'Img A with value {} (p={})'.format(1, 1-self.opt.ratio_A)])
+        plt.ylabel('Assigned importance')
+        plt.xlabel('Training iterations')
+        plt.savefig(os.path.join(self.destination, 'ratios_sm.png'))
+
     def plot_importances(self):
         lambd = torch.linspace(0, 1, 64).repeat(28,28,1,1).permute(3,2,0,1)
         lin_comb = lambd * self.train.dataset_A.example_imgs[0] + (1-lambd) * self.train.dataset_A.example_imgs[1]

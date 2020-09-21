@@ -19,7 +19,7 @@ class Options():
         parser.add_argument('--batch_size_B', type=int, default=64, help='batch size of B')
         parser.add_argument('--sampled_batch_size', type=int, default=64, help='sampled batch size')
 
-        parser.add_argument('--lr', type=float, default=0.1, help='learning rate')
+        parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 
         parser.add_argument('--n_epochs', type=int, default=4, help='number of epochs')
         parser.add_argument('--max_steps', type=int, default=5000, help='number of training steps')

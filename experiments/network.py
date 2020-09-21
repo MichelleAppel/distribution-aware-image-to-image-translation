@@ -205,15 +205,15 @@ def f_0(labels_A, labels_B):
    '''f = label of the image '''
 
    L_A = (labels_A.float()).sum()
-   L_B = (labels_B.float()).sum()
+   L_B = (labels_B.float()).mean()
 
    return L_A, L_B
 
 def f_1(real_A, real_B):
    '''f = mean of each image '''
 
-   L_A  = (torch.mean(real_A, dim=[2,3])).mean()
-   L_B = (torch.mean(real_B, dim=[2,3])).mean()
+   L_A = (torch.mean(real_A, dim=[2,3])).sum()
+   L_B = (torch.mean(real_B, dim=[2,3])).sum()
 
    return L_A, L_B
 
@@ -246,22 +246,33 @@ def f_3(real_A, real_B):
 
    return L_A, L_B
 
-def f_4(real_A, real_B):
+def weight_normalization(w):
+    return w
+    # return 0.5*(1 + w)
+
+def f_4(real_A, real_B, w):
    '''f = hidden values of a fixed (not-trained and randomly initialized) NN for the image'''
    
    ''' Architectures that work: '''
    #f=f_Net_1fcl().cuda() # 1 fcl
    #f=f_Net_2fcl().cuda() # 2 fcl
-   f=f_Net_3fcl().cuda() # 3 fcl : works for f = fc1 or fc2 or out (different behaviour for f = out)
-   #f=f_Net_4fcl().cuda() # 4 fcl : works for f = fc1 or fc2 or fc3 or out (different behaviour for f = fc3 or out)
-   #f=f_Net_1cl1fcl().cuda() # 1 cl 1 fcl : works for f = cl1 or out (different behaviour for f = out)
-   #f=f_Net_2cl2fcl().cuda() # 2 cl 2 fcl : works for f = cl1 or cl2, sometimes it works (with different behaviour) sometimes it doesn't for f = fc1 or out
+
+   ''' Architectures that do not always work: '''
+   f=f_Net_3fcl().cuda() # 3 fcl : works for f = fc1 or fc2, doesn't work for f = out
+   #f=f_Net_4fcl().cuda() # 4 fcl : works for f = fc1 or fc2, doesn't work for f = fc3 or out
+   #f=f_Net_1cl1fcl().cuda() # 1 cl 1 fcl : works for f = cl1, doesn't work for f = out   
+   #f=f_Net_2cl2fcl().cuda() # 2 cl 2 fcl : works for f = cl1 or cl2, doesn't work for f = fc1 or out
 
    ''' Choose which part of the NN to use as f (output or any hidden variable) by selecting the correct entry in the dictionary output of the NN '''
    f_A = f(real_A)['fc1']
+   if len(list(f_A.shape)) == 1:
+     weights = weight_normalization(w).view(-1)
+   else:
+     dim = torch.cat([torch.tensor([1]), torch.tensor(f_A.shape[1:]).long()], dim = 0)
+     weights = weight_normalization(w).repeat(tuple(dim))
    f_B = f(real_B)['fc1']
    
-   L_A  = (f_A.detach()).sum(dim = 0) # if f is a hidden variable, L_A and L_B are tensors, hence the sum(dim = 0)
+   L_A  = (f_A.detach() * weights).sum(dim = 0) # if f is a hidden variable, L_A and L_B are tensors, hence the sum(dim = 0)
    L_B = (f_B.detach()).mean(dim = 0)
 
    return L_A, L_B
@@ -274,6 +285,7 @@ class WeightNet(nn.Module):
 #        self.fc1 = nn.Linear(1, 1)
 #        self.fc2 = nn.Linear(1, 1)
         self.softmax = nn.Softmax(dim=0)
+        self.sigmoid = nn.Sigmoid()
 
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
@@ -286,4 +298,5 @@ class WeightNet(nn.Module):
         h2_t = h2.view(-1, 320)
         h3 = torch.sigmoid(self.fc1(h2_t))
         out = self.fc2(h3)
+        # out = self.sigmoid(out)
         return self.softmax(out), out
