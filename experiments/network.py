@@ -285,7 +285,7 @@ class WeightNet(nn.Module):
 #        self.fc1 = nn.Linear(1, 1)
 #        self.fc2 = nn.Linear(1, 1)
         self.softmax = nn.Softmax(dim=0)
-        self.sigmoid = nn.Sigmoid()
+        self.sigmoid = nn.Sigmoid() # TODO: try relu
 
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
@@ -298,5 +298,4 @@ class WeightNet(nn.Module):
         h2_t = h2.view(-1, 320)
         h3 = torch.sigmoid(self.fc1(h2_t))
         out = self.fc2(h3)
-        # out = self.sigmoid(out)
         return self.softmax(out), out
