@@ -289,13 +289,13 @@ class WeightNet(nn.Module):
 
         self.conv1 = nn.Conv2d(3, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.fc1 = nn.Linear(2000, 40)
+        self.fc1 = nn.Linear(500, 40)
         self.fc2 = nn.Linear(40, 1)
         
     def forward(self, x):
         h1 = torch.sigmoid(F.max_pool2d(self.conv1(x), 2))
         h2 = torch.sigmoid(F.max_pool2d(self.conv2(h1), 2))
-        h2_t = h2.view(-1, 2000)
+        h2_t = h2.view(-1, int(torch.Tensor(list(h2.shape[1:])).prod()))
         h3 = torch.sigmoid(self.fc1(h2_t))
         out = self.fc2(h3)
         return self.softmax(out), out
