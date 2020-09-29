@@ -4,8 +4,6 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 from . import network
-import torch.optim as optim
-
 
 class WeightCycleGANModel(BaseModel):
     """
@@ -55,7 +53,14 @@ class WeightCycleGANModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['W']
+
+        self.loss_names = []
+        if True: #opt.train_GAN:
+            self.loss_names += ['G_A', 'G_B', 'D_A', 'D_B']
+        if True: #opt.train_W:
+            self.loss_names += ['W']
+
+        # TODO: see if this works in all cases
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         visual_names_A = ['real_A', 'fake_B', 'rec_A', 'idt_A']
         visual_names_B = ['real_B', 'fake_A', 'rec_B', 'idt_B']
@@ -66,9 +71,9 @@ class WeightCycleGANModel(BaseModel):
         self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
         if self.isTrain:
-            self.model_names = ['G_A', 'G_B', 'D_A', 'D_B', 'W']
+            self.model_names = self.loss_names
         else:  # during test time, only load Gs
-            self.model_names = ['G_A', 'G_B']
+            self.model_names = ['G_A', 'G_B', 'D_A', 'D_B', 'W']
 
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
@@ -77,31 +82,28 @@ class WeightCycleGANModel(BaseModel):
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
+                                        opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netD_B = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
+                                        opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netW   = networks.WeightNet(opt.input_nc).cuda()
 
-        if self.isTrain:  # define discriminators
-            self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
-            self.netD_B = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
-            self.netW = network.WeightNet().cuda()
-
-        if self.isTrain:
-            if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
-                assert(opt.input_nc == opt.output_nc)
-            self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
-            self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
-            # define loss functions
-            self.criterionGAN = networks.weighted_GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
-            self.criterionCycle = torch.nn.L1Loss()
-            self.criterionIdt = torch.nn.L1Loss()
-            # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_W = optim.Adam(self.netW.parameters(), lr=0.001)
-        
-            self.optimizers.append(self.optimizer_G)
-            self.optimizers.append(self.optimizer_D)
-            self.optimizers.append(self.optimizer_W)
+        if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
+            assert(opt.input_nc == opt.output_nc)
+        self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
+        self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
+        # define loss functions
+        self.criterionGAN = networks.weighted_GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
+        self.criterionCycle = torch.nn.L1Loss()
+        self.criterionIdt = torch.nn.L1Loss()
+        # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
+        self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+        self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+        self.optimizer_W = torch.optim.Adam(self.netW.parameters(), lr=0.001)
+    
+        self.optimizers.append(self.optimizer_G)
+        self.optimizers.append(self.optimizer_D)
+        self.optimizers.append(self.optimizer_W)
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -208,18 +210,24 @@ class WeightCycleGANModel(BaseModel):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
         self.forward()      # compute fake images and reconstruction images.
-        # G_A and G_B
-        # self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
-        # self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
-        # self.backward_G()             # calculate gradients for G_A and G_B
-        # self.optimizer_G.step()       # update G_A and G_B's weights
-        # # D_A and D_B
-        # self.set_requires_grad([self.netD_A, self.netD_B], True)
-        # self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
-        # self.backward_D_A()      # calculate gradients for D_A
-        # self.backward_D_B()      # calculate graidents for D_B
-        # self.optimizer_D.step()  # update D_A and D_B's weights
+    
+            # G_A and G_B
+        self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
+        self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
+        self.backward_G()             # calculate gradients for G_A and G_B
+        if self.opt.train_GAN:
+            self.optimizer_G.step()       # update G_A and G_B's weights
 
+            # D_A and D_B
+        self.set_requires_grad([self.netD_A, self.netD_B], True)
+        self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
+        self.backward_D_A()      # calculate gradients for D_A
+        self.backward_D_B()      # calculate graidents for D_B
+        if self.opt.train_GAN:
+            self.optimizer_D.step()  # update D_A and D_B's weights
+
+        self.set_requires_grad([self.netD_A, self.netD_B], False)
         self.optimizer_W.zero_grad()
         self.backward_W()
-        self.optimizer_W.step()
+        if self.opt.train_W:
+            self.optimizer_W.step()
