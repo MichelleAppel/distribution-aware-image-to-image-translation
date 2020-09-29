@@ -116,7 +116,8 @@ class WeightCycleGANModel(BaseModel):
         AtoB = self.opt.direction == 'AtoB'
         self.real_A = input['A' if AtoB else 'B'].to(self.device)
         self.real_B = input['B' if AtoB else 'A'].to(self.device)
-        self.image_paths = input['A_paths' if AtoB else 'B_paths']
+        self.label_A = input['A_targets' if AtoB else 'B_targets'].to(self.device)
+        self.label_B = input['B_targets' if AtoB else 'A_targets'].to(self.device)
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
@@ -157,8 +158,12 @@ class WeightCycleGANModel(BaseModel):
         if netW == None:
             loss_D_real = self.criterionGAN(pred_real, True, None)
         else:
-            w, _ = netW(real)
-            loss_D_real = self.criterionGAN(pred_real, True, w.detach())
+            if self.opt.train_W:
+                w, _ = netW(real)
+                w = w.detach()
+            else:
+                w = None
+            loss_D_real = self.criterionGAN(pred_real, True, w)
         # Fake
         pred_fake = netD(fake.detach())
         loss_D_fake = self.criterionGAN(pred_fake, False)
@@ -169,13 +174,13 @@ class WeightCycleGANModel(BaseModel):
 
     def backward_D_A(self):
         """Calculate GAN loss for discriminator D_A"""
-        fake_B = self.fake_B_pool.query(self.fake_B)
-        self.loss_D_A = self.backward_D_basic(self.netD_A, self.netW, self.real_B, fake_B)
+        fake_A = self.fake_A_pool.query(self.fake_A)
+        self.loss_D_A = self.backward_D_basic(self.netD_A, self.netW, self.real_A, fake_A)
 
     def backward_D_B(self):
         """Calculate GAN loss for discriminator D_B"""
-        fake_A = self.fake_A_pool.query(self.fake_A)
-        self.loss_D_B = self.backward_D_basic(self.netD_B, None, self.real_A, fake_A)
+        fake_B = self.fake_B_pool.query(self.fake_B)
+        self.loss_D_B = self.backward_D_basic(self.netD_B, None, self.real_B, fake_B)
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""

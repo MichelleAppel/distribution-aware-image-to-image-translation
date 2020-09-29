@@ -1,10 +1,11 @@
+import functools
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn import init
 from torch.nn.utils import spectral_norm
-import functools
 from torch.optim import lr_scheduler
-
 
 ###############################################################################
 # Helper Functions
@@ -976,3 +977,24 @@ class JointDiscriminator(nn.Module):
         xy4 = self.fcl2(xy4)
 
         return xy4
+
+class WeightNet(nn.Module):
+    '''A simple network that predicts the importances of the samples'''
+
+    def __init__(self, input_nc):
+        super(WeightNet, self).__init__()
+        self.softmax = nn.Softmax(dim=0)
+        self.sigmoid = nn.Sigmoid() # TODO: try relu
+
+        self.conv1 = nn.Conv2d(input_nc, 10, kernel_size=5)
+        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+        self.fc1 = nn.Linear(320, 40) # TODO: automatize fc channel
+        self.fc2 = nn.Linear(40, 1)
+        
+    def forward(self, x):
+        h1 = torch.sigmoid(F.max_pool2d(self.conv1(x), 2))
+        h2 = torch.sigmoid(F.max_pool2d(self.conv2(h1), 2))
+        h2_t = h2.view(-1, int(torch.Tensor(list(h2.shape[1:])).prod()))
+        h3 = torch.sigmoid(self.fc1(h2_t))
+        out = self.fc2(h3)
+        return self.softmax(out), out

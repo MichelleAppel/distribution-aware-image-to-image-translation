@@ -36,5 +36,8 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=5000, help='multiply by a gamma every lr_decay_iters iterations')
 
+        parser.add_argument('--train_GAN', action='store_true', help='specify to train GAN in weighted setting')
+        parser.add_argument('--train_W', action='store_true', help='specify to train weight net in weighted setting')
+
         self.isTrain = True
         return parser

@@ -280,16 +280,14 @@ def f_4(real_A, real_B, w):
 class WeightNet(nn.Module):
     '''A simple network that predicts the importances of the samples'''
 
-    def __init__(self):
+    def __init__(self, input_nc):
         super(WeightNet, self).__init__()
-#        self.fc1 = nn.Linear(1, 1)
-#        self.fc2 = nn.Linear(1, 1)
         self.softmax = nn.Softmax(dim=0)
         self.sigmoid = nn.Sigmoid() # TODO: try relu
 
-        self.conv1 = nn.Conv2d(3, 10, kernel_size=5)
+        self.conv1 = nn.Conv2d(input_nc, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.fc1 = nn.Linear(500, 40)
+        self.fc1 = nn.Linear(500, 40) # TODO: automatize fc channel
         self.fc2 = nn.Linear(40, 1)
         
     def forward(self, x):
