@@ -135,7 +135,7 @@ class BaseModel(ABC):
         visual_ret = OrderedDict()
         for name in self.visual_names:
             if isinstance(name, str):
-                visual_ret[name] = getattr(self, name)
+                visual_ret[name] = getattr(self, name).cpu()
         return visual_ret
 
     def get_current_losses(self):

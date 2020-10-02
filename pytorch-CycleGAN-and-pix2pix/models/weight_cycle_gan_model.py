@@ -5,6 +5,7 @@ from .base_model import BaseModel
 from . import networks
 from . import network
 
+
 class WeightCycleGANModel(BaseModel):
     """
     This class implements the CycleGAN model, for learning image-to-image translation without paired data.
@@ -52,9 +53,10 @@ class WeightCycleGANModel(BaseModel):
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
         BaseModel.__init__(self, opt)
+
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
 
-        self.loss_names = []
+        self.loss_names = [] 
         if True: #opt.train_GAN:
             self.loss_names += ['G_A', 'G_B', 'D_A', 'D_B']
         if True: #opt.train_W:
@@ -66,7 +68,7 @@ class WeightCycleGANModel(BaseModel):
         visual_names_B = ['real_B', 'fake_A', 'rec_B', 'idt_B']
         if self.isTrain and self.opt.lambda_identity > 0.0:  # if identity loss is used, we also visualize idt_B=G_A(B) ad idt_A=G_A(B)
             visual_names_A.append('idt_B')
-            visual_names_B.append('idt_A')
+            visual_names_B.append('idt_A') 
 
         self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
@@ -87,6 +89,7 @@ class WeightCycleGANModel(BaseModel):
         self.netD_B = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
                                         opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
         self.netW   = networks.WeightNet(opt.input_nc).cuda()
+      
 
         if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
             assert(opt.input_nc == opt.output_nc)
@@ -99,7 +102,7 @@ class WeightCycleGANModel(BaseModel):
         # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
         self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
         self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-        self.optimizer_W = torch.optim.Adam(self.netW.parameters(), lr=0.001)
+        self.optimizer_W = torch.optim.Adam(self.netW.parameters(), lr=opt.lr)
     
         self.optimizers.append(self.optimizer_G)
         self.optimizers.append(self.optimizer_D)
@@ -131,15 +134,18 @@ class WeightCycleGANModel(BaseModel):
         self.idt_B = self.netG_A(self.real_B)
 
     def backward_W(self):
-        
+        # TODO: add domain B
         pred_real = self.netD_A(self.real_A).detach()
-        w, _ = self.netW(self.real_A)
-        loss_D_real = self.criterionGAN(pred_real, True, w)
-
         pred_fake = self.netD_A(self.fake_A_pool.query(self.fake_A)).detach()
-        loss_D_fake = self.criterionGAN(pred_fake, True, None)
 
-        self.loss_W = (loss_D_real - loss_D_fake) ** 2
+        if use_disc:
+            self.loss_D_real = self.criterionGAN(pred_real, True, self.w) # weigh domain A
+
+            self.loss_D_fake = self.criterionGAN(pred_fake, True, None)
+        else:
+            self.loss_D_real = self.scoring_function(pred_real)
+            self.loss_D_fake = self.scoring_function(pred_fake)
+        self.loss_W = (self.loss_D_real - self.loss_D_fake)**2 # How do we add domain B loss?
         self.loss_W.backward()
 
     def backward_D_basic(self, netD, netW, real, fake):
@@ -158,7 +164,7 @@ class WeightCycleGANModel(BaseModel):
         if netW == None:
             loss_D_real = self.criterionGAN(pred_real, True, None)
         else:
-            if self.opt.train_W:
+            if self.opt.train_W: # only weigh if W is trianing
                 w, _ = netW(real)
                 w = w.detach()
             else:
@@ -217,6 +223,7 @@ class WeightCycleGANModel(BaseModel):
         self.forward()      # compute fake images and reconstruction images.
     
             # G_A and G_B
+        self.set_requires_grad([self.netW], False)
         self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
         self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
         self.backward_G()             # calculate gradients for G_A and G_B
@@ -231,7 +238,7 @@ class WeightCycleGANModel(BaseModel):
         if self.opt.train_GAN:
             self.optimizer_D.step()  # update D_A and D_B's weights
 
-        self.set_requires_grad([self.netD_A, self.netD_B], False)
+        self.set_requires_grad([self.netW], True)
         self.optimizer_W.zero_grad()
         self.backward_W()
         if self.opt.train_W:

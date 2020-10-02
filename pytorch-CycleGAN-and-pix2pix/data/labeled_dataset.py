@@ -4,11 +4,11 @@ import random
 import numpy as np
 import torch
 import torchvision
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 from data.base_dataset import BaseDataset, get_transform
 from data.image_folder import make_dataset
-
 
 def binary_data(ratio=0.5, train=True, dataset='MNIST'):
     # ratio: percentage of zeroes
@@ -28,6 +28,7 @@ def binary_data(ratio=0.5, train=True, dataset='MNIST'):
         split = 'test'
       data = torchvision.datasets.SVHN('./files/', split=split, download=True,
                               transform=torchvision.transforms.Compose([
+                                torchvision.transforms.Resize(28, interpolation=Image.NEAREST), # same size as MNIST
                                 torchvision.transforms.ToTensor(),
                                 torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                               ]))     
@@ -119,8 +120,8 @@ class LabeledDataset(BaseDataset):
 
         A = self.dataset_A[index_A]
         B = self.dataset_B[index_B]
-
-        return {'A': A[0], 'B': B[0], 'A_targets': A[1], 'B_targets': B[1]}
+        
+        return {'A': A[0], 'B': B[0], 'A_targets': A[1], 'B_targets': B[1], 'A_paths': 'None', 'B_paths': 'None'}
 
     def __len__(self):
         """Return the total number of images in the dataset.
@@ -129,3 +130,4 @@ class LabeledDataset(BaseDataset):
         we take a maximum of
         """
         return max(len(self.dataset_A), len(self.dataset_B))
+

@@ -354,7 +354,7 @@ class weighted_GANLoss(nn.Module):
             if weights == None:
                 loss = self.loss(prediction, target_tensor)
             else:
-                loss = ((prediction - target_tensor)*weights.unsqueeze(-1).unsqueeze(-1)).sum()
+                loss = (((prediction - target_tensor)*weights.unsqueeze(-1).unsqueeze(-1))**2).sum()
         elif self.gan_mode == 'wgangp':
             if target_is_real:
                 if weights == None:

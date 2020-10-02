@@ -20,17 +20,17 @@ class BaseOptions():
     def initialize(self, parser):
         """Define the common options that are used in both training and test."""
         # basic parameters
-        parser.add_argument('--dataroot', required=True, help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
+        parser.add_argument('--dataroot', help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
+        parser.add_argument('--project_name', type=str, default='project_name', help='name of the project')
         parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')
         parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
+        
         # model parameters
-
         parser.add_argument('--dataset_A', type=str, default='MNIST', help='dataset in domain A')
         parser.add_argument('--dataset_B', type=str, default='SVHN', help='dataset in domain B')
-        parser.add_argument('--ratio_A', type=float, default=0.2, help='the ratio 0 to 1 in domain A')
+        parser.add_argument('--ratio_A', type=float, default=0.5, help='the ratio 0 to 1 in domain A')
         parser.add_argument('--ratio_B', type=float, default=0.5, help='the ratio 0 to 1 in domain B')
-
         parser.add_argument('--model', type=str, default='cycle_gan', help='chooses which model to use. [cycle_gan | pix2pix | test | colorization]')
         parser.add_argument('--input_nc', type=int, default=3, help='# of input image channels: 3 for RGB and 1 for grayscale')
         parser.add_argument('--output_nc', type=int, default=3, help='# of output image channels: 3 for RGB and 1 for grayscale')
