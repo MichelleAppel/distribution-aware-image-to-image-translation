@@ -21,7 +21,7 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 import time
 from options.train_options import TrainOptions
 from data import create_dataset
-from models import create_model
+from models import create_model, weight_model, networks
 from util.visualizer_wandb import Visualizer
 
 if __name__ == '__main__':
@@ -39,11 +39,18 @@ if __name__ == '__main__':
 
     total_iters = 0                # the total number of training iterations
 
-    # sketch TODO
-    #def create_scoring_network(discriminator)
-     #   #discriminator.net... remove layers...
-    #f = create_scoring_network(model.netD_B)
-    #model_w = weight_model(f=f)
+    # sketch
+    # def create_scoring_network(discriminator)
+    # # discriminator.net... remove layers...
+    # f = create_scoring_network(model.netD_B)
+    # model_w = weight_model(f=f) ######################
+
+    objective_function = networks.DiscriminatorLoss(model, opt)
+    weight_model = weight_model.WeightModel(opt, objective_function.criterion)
+    weight_model.setup(opt)
+    visualizer.watch_model(weight_model)
+
+    ####################################################
 
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
@@ -58,18 +65,25 @@ if __name__ == '__main__':
 
             total_iters += opt.batch_size
             epoch_iter += opt.batch_size
+
             model.set_input(data)         # unpack data from dataset and apply preprocessing
             model.optimize_parameters()   # calculate loss functions, get gradients, update network weights
-            
+            if opt.train_W:
+                weight_model.set_input(data)         # unpack data from dataset and apply preprocessing
+                weight_model.optimize_parameters()   # calculate loss functions, get gradients, update network weights                
 
             if total_iters % opt.display_freq == 0:   # display images on visdom and save images to a HTML file
                 save_result = total_iters % opt.update_html_freq == 0
                 
                 model.compute_visuals()
                 visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
+                if opt.train_W:
+                    visualizer.display_current_results(weight_model.get_current_visuals(), epoch, save_result)
 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
                 losses = model.get_current_losses()
+                if opt.train_W:
+                    losses.update(weight_model.get_current_losses())
                 t_comp = (time.time() - iter_start_time) / opt.batch_size
                 visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
                 if opt.display_id > 0:
