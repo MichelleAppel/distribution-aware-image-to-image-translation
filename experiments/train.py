@@ -64,8 +64,8 @@ class Train():
 
     def label_norm(self, labels):
         '''so that label 0 has a signal'''
-        return (labels - 0.5)*2
-        # return labels
+        # return (labels - 0.5)*2
+        return labels
 
     def train(self):
         for epoch in range(self.n_epochs):

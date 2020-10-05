@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
 
+
+
+
+
+
+
+
+
+
     
         {
             "name": "Python: experiments",
@@ -16,12 +25,22 @@
         }
 
         {
+            "name": "Python: cycleGAN weighted",
+            "type": "python",
+            "request": "launch",
+            "program": "pytorch-CycleGAN-and-pix2pix/train.py",
+            "args": ["--model", "weight_cycle_gan", "--dataroot", "pytorch-CycleGAN-and-pix2pix/datasets/numbers/", "--train_GAN"],
+            "console": "integratedTerminal"
+        }
+
+        {
             "name": "Python: cycleGAN",
             "type": "python",
             "request": "launch",
             "program": "pytorch-CycleGAN-and-pix2pix/train.py",
-            "args": ["--model", "weight_cycle_gan", "--dataroot", "pytorch-CycleGAN-and-pix2pix/datasets/numbers/", "--continue_train", "--checkpoints_dir", "pytorch-CycleGAN-and-pix2pix/checkpoints"],
+            "args": ["--model", "cycle_gan", "--dataset_mode", "labeled"],
             "console": "integratedTerminal"
         }
+
     ]
 }
