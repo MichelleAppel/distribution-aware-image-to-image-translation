@@ -52,7 +52,7 @@ class WeightModel(BaseModel):
 
         self.objective_function = objective_function
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['W']
+        self.loss_names = ['W', 'w0', 'w1', 'wu0', 'wu1']
         self.model_names = ['W']
 
         self.netW = networks.WeightNet(opt.input_nc).cuda()
@@ -86,7 +86,16 @@ class WeightModel(BaseModel):
         self.w, self.unnorm_w = self.netW(self.real_A)
 
     def backward_W(self):
-        self.loss_W = self.objective_function(self)
+        self.loss_W = self.objective_function(self)     
+
+    def get_current_examples(self, dataset):
+        example_data = dataset.example().cuda()
+        example_w, example_w_unnorm = self.netW(example_data)
+        self.loss_w0 = example_w[0]
+        self.loss_w1 = example_w[1]
+        self.loss_wu0 = example_w_unnorm[0]
+        self.loss_wu1 = example_w_unnorm[1]
+
 
     def optimize_parameters(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""

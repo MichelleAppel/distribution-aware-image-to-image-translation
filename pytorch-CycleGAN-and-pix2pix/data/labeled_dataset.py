@@ -108,8 +108,10 @@ class LabeledDataset(BaseDataset):
           dataset = self.dataset_B
 
         labels = dataset.targets
-        img0 = self.__getitem__([labels==0][0].nonzero()[0].item())[0]
-        img1 = self.__getitem__([labels==1][0].nonzero()[0].item())[0]
+        idx0 = [labels==0][0].nonzero()[0].item()
+        idx1 = [labels==1][0].nonzero()[0].item()
+        img0 = dataset[idx0][0].unsqueeze(0)
+        img1 = dataset[idx1][0].unsqueeze(0)
         ex = torch.cat((img0, img1), 0)
               
         return ex

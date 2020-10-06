@@ -1018,4 +1018,4 @@ class DiscriminatorLoss():
         self.loss_D_fake = self.loss_function(pred_fake, True, None)
 
         self.loss_W = (self.loss_D_real - self.loss_D_fake)**2
-        return self.loss_W
+        return self.loss_W 
