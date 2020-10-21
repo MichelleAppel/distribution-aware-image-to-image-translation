@@ -5,7 +5,6 @@ from .base_model import BaseModel
 from . import networks
 from . import network
 
-
 class WeightModel(BaseModel):
     """
     This class implements the CycleGAN model, for learning image-to-image translation without paired data.
@@ -41,7 +40,7 @@ class WeightModel(BaseModel):
 
         return parser
 
-    def __init__(self, opt, objective_function):
+    def __init__(self, opt, criterion):
         """Initialize the CycleGAN class.
 
         Parameters:
@@ -50,18 +49,15 @@ class WeightModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
 
-        self.objective_function = objective_function
+        self.criterion = criterion
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['W', 'w0', 'w1', 'wu0', 'wu1']
+        self.loss_names = ['W', 'w0', 'w1', 'wu0', 'wu1', 'count0', 'count1']
         self.model_names = ['W']
 
         self.netW = networks.WeightNet(opt.input_nc).cuda()
       
         self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
         self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
-
-        # define loss functions
-        self.criterionGAN = networks.weighted_GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
 
         # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
         self.optimizer_W = torch.optim.Adam(self.netW.parameters(), lr=opt.lr)
@@ -86,7 +82,8 @@ class WeightModel(BaseModel):
         self.w, self.unnorm_w = self.netW(self.real_A)
 
     def backward_W(self):
-        self.loss_W = self.objective_function(self)     
+        self.loss_W = self.criterion(self)
+        self.loss_W.backward() 
 
     def get_current_examples(self, dataset):
         example_data = dataset.example().cuda()
@@ -95,7 +92,8 @@ class WeightModel(BaseModel):
         self.loss_w1 = example_w[1]
         self.loss_wu0 = example_w_unnorm[0]
         self.loss_wu1 = example_w_unnorm[1]
-
+        self.loss_count0 = (self.label_A == 0).sum()/float(self.label_A.shape[0])
+        self.loss_count1 = (self.label_A == 1).sum()/float(self.label_A.shape[0])
 
     def optimize_parameters(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""

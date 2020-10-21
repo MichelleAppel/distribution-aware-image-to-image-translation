@@ -983,6 +983,8 @@ class WeightNet(nn.Module):
 
     def __init__(self, input_nc):
         super(WeightNet, self).__init__()
+        init_weights(self, 'xavier')
+
         self.softmax = nn.Softmax(dim=0)
         self.sigmoid = nn.Sigmoid() # TODO: try relu
 
@@ -998,6 +1000,7 @@ class WeightNet(nn.Module):
         h3 = torch.sigmoid(self.fc1(h2_t))
         out = self.fc2(h3)
         return self.softmax(out), out
+        # return out/out.sum(), out
 
 class DiscriminatorLoss():
 
@@ -1005,11 +1008,12 @@ class DiscriminatorLoss():
         self.model = model
         self.loss_function = weighted_GANLoss(opt.gan_mode).to(model.device)
     
-    def forward(self):
-        self.model.forward()
+    # def forward(self):
+    #     self.model.forward()
 
     def criterion(self, weight_model):
-        self.forward()
+        # TODO: check
+        # self.forward()
 
         pred_real = self.model.netD_A(self.model.real_A).detach()
         pred_fake = self.model.netD_A(self.model.fake_A_pool.query(self.model.fake_A)).detach()
@@ -1018,4 +1022,4 @@ class DiscriminatorLoss():
         self.loss_D_fake = self.loss_function(pred_fake, True, None)
 
         self.loss_W = (self.loss_D_real - self.loss_D_fake)**2
-        return self.loss_W 
+        return self.loss_W

@@ -65,10 +65,13 @@ def binary_data(ratio=0.5, train=True, dataset='MNIST'):
       #idx1 = [True if i in indices else False for i in range(len(idx1))]
 
     idx = idx0.tolist() + idx1.tolist()
-    idxm = torch.tensor( [True if i in idx else False for i in range(dim)] )
+    # idxm = torch.tensor( [True if i in idx else False for i in range(dim)] )
 
     #labels = MNIST.train_labels[idxm]
     #data = MNIST.train_data[idxm]
+
+    shuffle = torch.randperm(len(idx))
+    idx = torch.Tensor(idx).long()[shuffle]
 
     if dataset == 'MNIST':
       data.targets = data.targets[idx]
@@ -113,7 +116,7 @@ class LabeledDataset(BaseDataset):
         img0 = dataset[idx0][0].unsqueeze(0)
         img1 = dataset[idx1][0].unsqueeze(0)
         ex = torch.cat((img0, img1), 0)
-              
+           
         return ex
 
     def __getitem__(self, index):     

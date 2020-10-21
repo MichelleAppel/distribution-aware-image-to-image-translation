@@ -35,7 +35,7 @@ if __name__ == '__main__':
     model.setup(opt)               # regular setup: load and print networks; create schedulers
 
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
-    visualizer.watch_model(model)
+    # visualizer.watch_model(model)
 
     total_iters = 0                # the total number of training iterations
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     objective_function = networks.DiscriminatorLoss(model, opt)
     weight_model = weight_model.WeightModel(opt, objective_function.criterion)
     weight_model.setup(opt)
-    visualizer.watch_model(weight_model)
+    # visualizer.watch_model(weight_model)
 
     ####################################################
 
@@ -64,13 +64,18 @@ if __name__ == '__main__':
                 t_data = iter_start_time - iter_data_time
 
             total_iters += opt.batch_size
-            epoch_iter += opt.batch_size
+            epoch_iter += opt.batch_size 
 
             model.set_input(data)         # unpack data from dataset and apply preprocessing
             model.optimize_parameters()   # calculate loss functions, get gradients, update network weights
             if opt.train_W:
                 weight_model.set_input(data)         # unpack data from dataset and apply preprocessing
                 weight_model.optimize_parameters()   # calculate loss functions, get gradients, update network weights                
+                total_norm=0
+                for p in weight_model.netW.parameters():
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+                
 
             if total_iters % opt.display_freq == 0:   # display images on visdom and save images to a HTML file
                 save_result = total_iters % opt.update_html_freq == 0
@@ -82,15 +87,16 @@ if __name__ == '__main__':
                     visualizer.display_current_results(weight_model.get_current_visuals(), epoch, save_result)
 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
-                weight_model.get_current_examples(dataset.dataset)
                 losses = model.get_current_losses()
                 if opt.train_W:
+                    weight_model.get_current_examples(dataset.dataset)
                     losses.update(weight_model.get_current_losses())
                 t_comp = (time.time() - iter_start_time) / opt.batch_size
                 
                 visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
                 if opt.display_id > 0:
                     visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses)
+                    visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, {'total_norm': total_norm})
                 
             if total_iters % opt.save_latest_freq == 0:   # cache our latest model every <save_latest_freq> iterations
                 print('saving the latest model (epoch %d, total_iters %d)' % (epoch, total_iters))

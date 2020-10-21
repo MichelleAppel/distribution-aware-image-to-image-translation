@@ -3,6 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from torchvision.utils import make_grid
+
+import matplotlib.pyplot as plt
+
 class f_Net_2cl2fcl(nn.Module):
     ''' NN with 2 convolutional layers and fully connected layers'''
 
@@ -297,3 +301,14 @@ class WeightNet(nn.Module):
         h3 = torch.sigmoid(self.fc1(h2_t))
         out = self.fc2(h3)
         return self.softmax(out), out
+
+def visualize_img_batch(batch):
+    '''Visualizes image batch
+    
+    Parameters:
+    batch (Tensor): An image batch
+    '''
+    grid = make_grid(batch.cpu(), nrow=8, padding=1, normalize=True, range=None, scale_each=False, pad_value=0.5)
+    plt.imshow(grid.permute(1,2,0))
+    plt.show()
+    plt.close()
