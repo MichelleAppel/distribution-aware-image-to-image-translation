@@ -35,7 +35,7 @@ if __name__ == '__main__':
     model.setup(opt)               # regular setup: load and print networks; create schedulers
 
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
-    # visualizer.watch_model(model)
+    visualizer.watch_model(model)
 
     total_iters = 0                # the total number of training iterations
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     objective_function = networks.DiscriminatorLoss(model, opt)
     weight_model = weight_model.WeightModel(opt, objective_function.criterion)
     weight_model.setup(opt)
-    # visualizer.watch_model(weight_model)
+    visualizer.watch_model(weight_model)
 
     ####################################################
 
