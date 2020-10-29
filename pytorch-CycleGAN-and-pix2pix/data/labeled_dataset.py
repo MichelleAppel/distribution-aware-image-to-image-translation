@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 from data.base_dataset import BaseDataset, get_transform
 from data.image_folder import make_dataset
 
-def binary_data(ratio=0.5, train=True, dataset='MNIST'):
+def MNIST_data(distribution=[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], train=True, dataset='MNIST'):
     # ratio: percentage of zeroes
     #returns (data, labels) for MNIST with only zeroes and ones, with the given ratio
 
@@ -33,51 +33,38 @@ def binary_data(ratio=0.5, train=True, dataset='MNIST'):
                                 torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                               ]))     
 
-    if dataset == 'MNIST':
-      idxm0 = data.targets==0
-      idxm1 = data.targets==1 
-    else:
-      idxm0 = torch.Tensor(data.labels)==0
-      idxm1 = torch.Tensor(data.labels)==1       
-    dim = len(idxm0)  
 
-    n0 = torch.sum(idxm0)
-    n1 = torch.sum(idxm1)
-    tot = n0 + n1
-
-    if ratio < n0.item()/tot.item():
-      if ratio == 1:
-        size = n0
-      else:
-        size = int(n1/(1-ratio))
-      idx0 = np.where(idxm0)[0]
-      idx0 = idx0[:int(size*ratio)]
-      idx1 = np.where(idxm1)[0]
-      #idx0 = [True if i in indices else False for i in range(len(idx0))]
-    else:
-      if ratio == 1:
-        size = n1
-      else:
-        size = int(n0/ratio)
-      idx0 = np.where(idxm0)[0]
-      idx1 = np.where(idxm1)[0]
-      idx1 = idx1[:int(size*(1-ratio))]
-      #idx1 = [True if i in indices else False for i in range(len(idx1))]
-
-    idx = idx0.tolist() + idx1.tolist()
-    # idxm = torch.tensor( [True if i in idx else False for i in range(dim)] )
-
-    #labels = MNIST.train_labels[idxm]
-    #data = MNIST.train_data[idxm]
-
-    shuffle = torch.randperm(len(idx))
-    idx = torch.Tensor(idx).long()[shuffle]
 
     if dataset == 'MNIST':
-      data.targets = data.targets[idx]
+      targets = data.targets
     else:
-      data.targets = data.labels[idx]
-    data.data = data.data[idx]
+      targets = torch.Tensor(data.labels)    
+
+    unique_labels = torch.Tensor(distribution).nonzero()
+    idxm = [targets==label for label in unique_labels] 
+    idx = [np.where(idxm[label])[0] for label in unique_labels]
+
+    tot_labels = [(targets==label).sum().item() for label in unique_labels]
+    dim_res = [tot_labels[label] / distribution[label] for label in unique_labels]
+    dim_res = int(min(dim_res)) / 2
+
+    valid_idx = []
+    valid_idx_labels = [[] for label in unique_labels]
+    for label in unique_labels:
+      number_samples = distribution[label] * dim_res
+      valid_idx_labels[label] = idx[label][:int(number_samples)]
+      valid_idx = valid_idx + valid_idx_labels[label].tolist()
+
+    valid_idx = torch.sort(torch.tensor(valid_idx)).values
+
+    shuffle = torch.randperm(len(valid_idx))
+    valid_idx = torch.Tensor(valid_idx.float())[shuffle].long()
+
+    if dataset == 'MNIST':
+      data.targets = data.targets[valid_idx]
+    else:
+      data.targets = data.labels[valid_idx]
+    data.data = data.data[valid_idx]
 
     return data 
 
@@ -91,8 +78,8 @@ class LabeledDataset(BaseDataset):
         """
         BaseDataset.__init__(self, opt)
 
-        self.dataset_A = binary_data(ratio=opt.ratio_A, train=opt.isTrain, dataset=opt.dataset_A)
-        self.dataset_B = binary_data(ratio=opt.ratio_B, train=opt.isTrain, dataset=opt.dataset_B)
+        self.dataset_A = MNIST_data(distribution=opt.distribution_A, train=opt.isTrain, dataset=opt.dataset_A)
+        self.dataset_B = MNIST_data(distribution=opt.distribution_B, train=opt.isTrain, dataset=opt.dataset_B)
 
         btoA = self.opt.direction == 'BtoA'
         input_nc = self.opt.output_nc if btoA else self.opt.input_nc       # get the number of channels of input image
