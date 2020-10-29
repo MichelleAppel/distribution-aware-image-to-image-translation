@@ -88,10 +88,8 @@ class WeightModel(BaseModel):
     def get_current_examples(self, dataset):
         example_data = dataset.example().cuda()
         example_w, example_w_unnorm = self.netW(example_data)
-        self.loss_w0 = example_w[0]
-        self.loss_w1 = example_w[1]
-        self.loss_wu0 = example_w_unnorm[0]
-        self.loss_wu1 = example_w_unnorm[1]
+        self.loss_w = example_w
+        self.loss_wu = example_w_unnorm
         self.loss_count0 = (self.label_A == 0).sum()/float(self.label_A.shape[0])
         self.loss_count1 = (self.label_A == 1).sum()/float(self.label_A.shape[0])
 

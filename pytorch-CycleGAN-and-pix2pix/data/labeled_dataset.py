@@ -78,6 +78,8 @@ class LabeledDataset(BaseDataset):
         """
         BaseDataset.__init__(self, opt)
 
+        self.opt = opt
+
         self.dataset_A = MNIST_data(distribution=opt.distribution_A, train=opt.isTrain, dataset=opt.dataset_A)
         self.dataset_B = MNIST_data(distribution=opt.distribution_B, train=opt.isTrain, dataset=opt.dataset_B)
 
@@ -94,15 +96,19 @@ class LabeledDataset(BaseDataset):
         '''
         if domain == 'A':
           dataset = self.dataset_A
+          distribution = self.opt.distribution_A
         else:
           dataset = self.dataset_B
+          distribution = self.opt.distribution_B
 
         labels = dataset.targets
-        idx0 = [labels==0][0].nonzero()[0].item()
-        idx1 = [labels==1][0].nonzero()[0].item()
-        img0 = dataset[idx0][0].unsqueeze(0)
-        img1 = dataset[idx1][0].unsqueeze(0)
-        ex = torch.cat((img0, img1), 0)
+
+        
+        unique_labels = torch.Tensor(distribution).nonzero()
+        idx = [[labels==i][0].nonzero()[0].item for i in unique_labels]
+        img = [dataset[i][0].unsqueeze(0) for i in idx]
+
+        ex = torch.cat(img, 0)
            
         return ex
 
