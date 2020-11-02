@@ -51,7 +51,7 @@ class WeightModel(BaseModel):
 
         self.criterion = criterion
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['W', 'w0', 'w1', 'wu0', 'wu1', 'count0', 'count1']
+        self.loss_names = ['W', 'w', 'wu', 'count0', 'count1']
         self.model_names = ['W']
 
         self.netW = networks.WeightNet(opt.input_nc).cuda()

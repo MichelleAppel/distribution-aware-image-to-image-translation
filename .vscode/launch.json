@@ -5,15 +5,6 @@
     "version": "0.2.0",
     "configurations": [
 
-
-
-
-
-
-
-
-
-
     
         {
             "name": "Python: experiments",
@@ -38,7 +29,7 @@
             "type": "python",
             "request": "launch",
             "program": "pytorch-CycleGAN-and-pix2pix/train.py",
-            "args": ["--model", "cycle_gan", "--dataset_mode", "labeled"],
+            "args": ["--model", "cycle_gan", "--dataset_mode", "labeled", "--train_W"],
             "console": "integratedTerminal"
         }
 

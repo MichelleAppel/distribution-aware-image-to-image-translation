@@ -94,7 +94,7 @@ class Train():
                 # Using f as objective function
                 if self.opt.objective_function == 0:
                   L_A, L_B = f_0(labels_A, labels_B)
-                else : 
+                else: 
                   L_A, L_B = self.objective_function(real_A, real_B, w)
                 
                 loss_w = ((L_A - L_B)**2).sum() # if f is a hidden variable, L_A and L_B are tensors, hence the sum() after the square
@@ -117,9 +117,7 @@ class Train():
                 w_a = self.weight_normalization((self.weight_network(self.dataset_A.example_imgs.float().unsqueeze(1).cuda())[1])).detach()
                 w_a_sm = self.weight_normalization((self.weight_network(self.dataset_A.example_imgs.float().unsqueeze(1).cuda())[0])).detach()
                 self.example_importances_A += [(w_a[0].item(), w_a[1].item())] # Store examples in a list, the unnormalized w is used here
-                self.example_importances_A_sm += [(w_a_sm[0].item(), w_a_sm[1].item())] # Store examples in a list, the unnormalized w is used here
-
-
+                self.example_importances_A_sm += [(w_a_sm[0].item(), w_a_sm[1].item())] # Store examples in a list, the unnormalized w is used he
 
                 if i % 20 == 0:
                     print('epoch', epoch, 'step', i, 'train_loss_w: ', loss_w.item())
